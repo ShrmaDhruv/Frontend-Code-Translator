@@ -84,57 +84,98 @@ Rules that always apply:
 
 
 _REACT_INSTRUCTIONS = """
-Target: React (functional component with hooks)
+Target: React (functional component with hooks only)
 
 Structure rules:
-  - Use a named arrow function component: const ComponentName = ({ ...props }) => { ... }
-  - Export default at the bottom: export default ComponentName
-  - All imports at the top including React hooks
+  - Use arrow function component:
+      const ComponentName = ({ ...props }) => { ... }
+  - Export default at bottom:
+      export default ComponentName
+  - All imports at the top
+
+ Strict Rules (VERY IMPORTANT):
+
+- NEVER use document.getElementById, querySelector, or direct DOM access
+- NEVER initialize state using DOM values
+- ALWAYS treat React state as the single source of truth
+- NEVER use uncontrolled inputs when using state (always bind value + onChange)
+- NEVER mutate state directly (no name = "abc")
+- ALWAYS use setter (setName)
+- NEVER use React class components
+- NEVER mix frameworks (Vue syntax, Angular, etc.)
+- NEVER forget event.preventDefault() in form submit handlers
+- NEVER leave JSX tags unclosed
+
 
 State:
-  - Each IRState entry → const [name, setName] = useState(init)
-  - Import useState from 'react'
+  - const [name, setName] = useState(initialValue)
+  - Initialize with plain values only ("", 0, [], {})
+  - NEVER use DOM reads during initialization
+
 
 Computed:
-  - Each IRComputed entry → const name = useMemo(() => expression, [deps])
-  - Import useMemo from 'react'
-  - If deps is empty use []
+  - const value = useMemo(() => expression, [deps])
+  - Include correct dependencies array
+
 
 Lifecycle:
-  - onMount        → useEffect(() => { body }, [])
-  - onDestroy      → useEffect(() => { return () => { body } }, [])
-  - onUpdate       → useEffect(() => { body })
-  - onEveryRender  → useEffect(() => { body })
-  - onChanges      → useEffect(() => { body }, [relevant deps])
-  - Import useEffect from 'react'
+  - onMount       → useEffect(() => { ... }, [])
+  - onDestroy     → useEffect(() => { return () => { ... } }, [])
+  - onUpdate      → useEffect(() => { ... })
+  - onChanges     → useEffect(() => { ... }, [deps])
+
 
 Props:
-  - Destructure in function signature: const App = ({ prop1, prop2 }) => {
-  - Required props have no default, optional props use = defaultValue
+  - Destructure in function signature:
+      const App = ({ prop1, prop2 = defaultValue }) => {}
+
 
 Methods:
-  - Each IRMethod → const methodName = (params) => { body }
-  - Async methods → const methodName = async (params) => { body }
+  - const methodName = (params) => { ... }
+  - async allowed
 
-Events (in JSX):
-  - events.click   → onClick={handler}
-  - events.change  → onChange={handler}
-  - events.input   → onInput={handler}
-  - events.submit  → onSubmit={handler}
-Template:
-  - Return JSX from the component function
-  - Use className instead of class
-  - Self-close empty elements: <br />, <input />
-  - Conditionals: {condition && <Element />} or ternary
-  - Loops: {items.map((item, i) => <Element key={i} />)}
 
-Imports to always include:
-  - import React from 'react'  (if using JSX or React namespace)
-  - Add specific hooks to the react import: import React, { useState, useEffect } from 'react'"""
+Events (JSX only):
+  - onClick={handler}
+  - onChange={handler}
+  - onInput={handler}
+  - onSubmit={handler}
+
+  Rules:
+  - Handler MUST exist
+  - For forms: ALWAYS call event.preventDefault()
+  - NEVER use inline DOM access
+
+
+Form Handling Rules:
+  - ALWAYS use controlled components:
+      value={state} + onChange={(e) => setState(e.target.value)}
+  - NEVER read values from DOM
+  - Use .trim() ONLY during validation, not initialization
+
+
+Template (JSX):
+  - Return JSX
+  - Use className (NOT class)
+  - Self-close tags: <input />, <br />
+  - Conditionals: {cond && <A />} or ternary
+  - Lists: items.map((item, i) => <El key={i} />)
+
+
+Error Handling:
+  - Store errors in state:
+      const [error, setError] = useState("")
+  - Update via setError(...)
+  - Display using JSX
+
+
+Imports:
+  - import React from 'react'
+  - import { useState, useEffect, useMemo } from 'react' (as needed)"""
 
 
 _VUE_INSTRUCTIONS = """
-Target: Vue 3 SFC with <script setup> and Composition API
+Target: Vue 3 SFC using <script setup> and Composition API only
 
 Structure:
   <template>
@@ -142,7 +183,7 @@ Structure:
   </template>
 
   <script setup>
-  import { ref, computed, onMounted, ... } from 'vue'
+  import { ref, computed, onMounted, onUnmounted, onUpdated, onBeforeMount, onBeforeUnmount } from 'vue'
   ...
   </script>
 
@@ -150,54 +191,86 @@ Structure:
   ...
   </style>
 
+
+Strict Rules (VERY IMPORTANT):
+
+- NEVER use document.getElementById, querySelector, or direct DOM access
+- NEVER initialize refs using DOM values
+- ALWAYS use v-model for form inputs instead of manual DOM reads
+- NEVER mix Options API (data, methods, mounted, etc.)
+- NEVER use React patterns (setState, useState, etc.)
+- NEVER import or use event names (click, input, change) from Vue
+- NEVER use watchEffect for handling DOM events
+- Every template event must reference a defined function
+
+
 State:
-  - Each IRState entry → const name = ref(init)
-  - Access state value as name.value in script, name in template
+  - Each state → const name = ref(initialValue)
+  - ALWAYS initialize with plain values ("" | 0 | [] | {})
+  - NEVER use DOM to initialize state
+  - Use name.value in script, name in template
+
 
 Computed:
-  - Each IRComputed entry → const name = computed(() => expression)
-  - Import computed from 'vue'
+  - const name = computed(() => expression)
+
 
 Lifecycle:
-  - onMount   → onMounted(() => { body });   import onMounted from 'vue'
-  - onDestroy → onUnmounted(() => { body }); import onUnmounted from 'vue'
-  - onUpdate  → onUpdated(() => { body });   import onUpdated from 'vue'
-  - onBeforeMount  → onBeforeMount(...)
-  - onBeforeDestroy → onBeforeUnmount(...)
+  - onMounted(() => { ... })
+  - onUnmounted(() => { ... })
+  - onUpdated(() => { ... })
+  - onBeforeMount(() => { ... })
+  - onBeforeUnmount(() => { ... })
+
 
 Props:
-  - defineProps({ propName: { type: Type, required: bool, default: val } })
-  - Do not import defineProps — it is a compiler macro
+  - const props = defineProps({
+      propName: { type: Type, required: boolean, default: value }
+    })
+
 
 Methods:
-  - Each IRMethod → const methodName = (params) => { body }
-  - Async methods → const methodName = async (params) => { body }
+  - const methodName = (params) => { ... }
+  - async allowed
 
-Events (in template):
-  - events.click  → @click="handler"
-  - events.change → @change="handler"
-  - events.input  → @input="handler"
-  - events.submit → @submit.prevent="handler"
 
-  - Do not import click, input, change, submit, onClick, onInput, onChange,
-    or any event name from 'vue'
-  - Event handlers are regular local functions referenced by template directives
-  - Never output React setter calls such as setCount(...) in Vue code; update
-    count.value in script or count directly in the template expression
-  - Do not use watchEffect to simulate click/change/input/submit handlers
-  - Every template event directive must either contain a valid inline expression
-    or reference a handler function that is defined in <script setup>
+Events (Template only):
+  - @click="handler"
+  - @input="handler"
+  - @change="handler"
+  - @submit.prevent="handler"
+
+  Rules:
+  - Handler MUST exist in <script setup>
+  - No inline DOM access
+  - No watch/watchEffect for events
+
 
 Template:
-  - Use v-if="condition" for conditionals
-  - Use v-for="item in items" :key="item.id" for loops
-  - Use :propName="value" for dynamic bindings
-  - Use v-model="stateName" for two-way binding
-  - Use class instead of className
+  - v-if="condition"
+  - v-for="item in items" :key="item.id"
+  - v-model="state"
+  - :prop="value"
+  - class (NOT className)
 
-Imports from 'vue' to include as needed:
-  ref, reactive, computed, watch, watchEffect,
-  onMounted, onUnmounted, onUpdated, onBeforeMount, onBeforeUnmount"""
+
+Form Handling Rules:
+  - ALWAYS use v-model for inputs
+  - ALWAYS validate using reactive state (ref values)
+  - NEVER read values using document.getElementById
+  - Use .trim() during validation, NOT during initialization
+
+
+Error Handling:
+  - Store errors in ref (e.g., const errorMsg = ref(""))
+  - Update errorMsg.value inside methods
+  - Display errors using {{ errorMsg }}
+
+
+Imports (only when needed):
+  ref, reactive, computed, watch,
+  onMounted, onUnmounted, onUpdated,
+  onBeforeMount, onBeforeUnmount"""
 
 
 _ANGULAR_INSTRUCTIONS = """
@@ -289,7 +362,7 @@ Implements clause:
 
 
 _HTML_INSTRUCTIONS = """
-Target: Vanilla HTML with inline JavaScript — no framework
+Target: Vanilla HTML + CSS + JavaScript (NO framework)
 
 Structure:
   <!DOCTYPE html>
@@ -298,81 +371,187 @@ Structure:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ComponentName</title>
+
     <style>
-      styles here
+      /* CSS here */
     </style>
   </head>
+
   <body>
-    markup here
+    <!-- HTML markup here -->
+
     <script>
-      logic here
+      // JavaScript here
     </script>
   </body>
   </html>
 
-Safety and initialization:
-  - Every id or class referenced by JavaScript must exist in the HTML markup
-    before it is queried
-  - If the script queries DOM elements or attaches listeners, put that setup
-    inside document.addEventListener('DOMContentLoaded', () => { ... }) unless
-    the script is placed after every referenced element
-  - DOMContentLoaded callbacks must contain real setup or an initial render call
-  - Do not leave empty containers without rendering their expected content
-  - Use exactly this viewport shape: content="width=device-width, initial-scale=1.0"
-  - Store queried elements in constants and check them before using them:
-    const button = document.getElementById('button-id')
-    if (button) { button.addEventListener('click', handler) }
-  - Never call addEventListener, set textContent, set innerHTML, or access value
-    on a possibly null DOM element
-  - Keep selectors, markup ids/classes, and JavaScript references synchronized
-  - Place listener attachment in one initialization flow, not scattered at top level
+
+Strict Rules (VERY IMPORTANT)
+
+- NEVER use React, Vue, Angular, JSX, hooks, or framework syntax
+- NEVER use inline event attributes:
+    onclick=""
+    onchange=""
+    oninput=""
+    onsubmit=""
+- NEVER use React-style CSS:
+    borderRadius
+    boxShadow
+    alignItems
+  Use standard CSS:
+    border-radius
+    box-shadow
+    align-items
+
+- NEVER use duplicate id attributes
+- Use class for repeated elements
+- NEVER access DOM elements before they exist
+- NEVER call addEventListener on null elements
+- NEVER leave empty DOMContentLoaded blocks
+- NEVER scatter event listeners across multiple unrelated locations
+- NEVER mix HTML attributes with JavaScript event systems
+
+
+Initialization Rules:
+  - Put ALL DOM querying and listener setup inside:
+
+    document.addEventListener('DOMContentLoaded', () => {
+      init();
+    });
+
+  - Create a single init() function for setup
+  - init() must:
+      - query elements
+      - attach listeners
+      - render initial UI if needed
+
+  - Store queried elements in constants:
+
+    const form = document.getElementById('form');
+
+  - Guard element usage:
+
+    if (form) {
+      form.addEventListener(...)
+    }
+
 
 State:
-  - Each IRState entry → let name = init  (at top of script block)
-  - Use let for mutable state, const for constants
+  - Mutable state:
+      let count = 0;
+
+  - Constants:
+      const API_URL = "...";
+
 
 Computed:
-  - Each IRComputed entry → a function: function getName() { return expression }
-  - Call as getName() wherever the value is needed
+  - Use functions:
 
-Lifecycle:
-  - onMount   → document.addEventListener('DOMContentLoaded', () => { body })
-  - onDestroy → window.addEventListener('beforeunload', () => { body })
-  - onUpdate  → call manually after state changes
+    function getTotal() {
+      return price * qty;
+    }
 
-Props:
-  - No props in vanilla HTML — use data attributes or URL params
-  - Convert props to configurable variables at the top of the script
 
 Methods:
-  - Each IRMethod → function methodName(params) { body }
-  - Async methods → async function methodName(params) { body }
+  - Standard functions:
+
+    function increment() {
+      count++;
+      render();
+    }
+
+  - Async allowed:
+
+    async function fetchData() {}
+
+
+Lifecycle:
+  - onMount:
+      document.addEventListener('DOMContentLoaded', () => { ... })
+
+  - onDestroy:
+      window.addEventListener('beforeunload', () => { ... })
+
+  - onUpdate:
+      call render() manually after state changes
+
 
 Events:
-  - Prefer addEventListener over inline attributes
-  - Do not use inline event attributes such as onclick, onchange, oninput, or onsubmit
-  - Do not assign event handler properties such as element.onclick = handler
-  - events.click  → element.addEventListener('click', handler)
-  - events.change → element.addEventListener('change', handler)
-  - events.submit → form.addEventListener('submit', (e) => { e.preventDefault(); handler() })
+  - Use addEventListener ONLY
 
-  - Attach event listeners only after DOMContentLoaded or after the element markup
-  - Guard each listener target with an if (element) check
+    button.addEventListener('click', handler)
 
-DOM updates:
-  - Update DOM manually after state changes using getElementById or querySelector
-  - Set element.textContent for text, element.innerHTML sparingly
-  - Create initial HTML markup or call render() during DOMContentLoaded so the UI
-    is visible immediately
-  - Every method that changes state must update the visible DOM directly or call
-    a render/update function afterward
-  - If the source uses React setters such as setCount, do not create setCount in
-    HTML; instead update the mutable variable and then update the DOM element
+  - Form submit:
 
-Template:
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handler();
+    })
+
+  - Input:
+
+    input.addEventListener('input', handler)
+
+  - Change:
+
+    select.addEventListener('change', handler)
+
+
+DOM Updates:
+  - Update UI manually after state changes
+  - Use:
+      element.textContent
+      element.innerHTML (sparingly)
+
+  - Prefer render() for centralized updates
+
+  Example:
+
+    function render() {
+      counter.textContent = count;
+    }
+
+  - Every state-changing method MUST:
+      - update DOM directly
+      OR
+      - call render()
+
+
+Template Rules:
   - Use standard HTML elements
-  - Use id attributes to reference elements from script
-  - Use class instead of className"""
+  - Use class (NOT className)
+  - Use unique ids only when needed
+  - Use classes for reusable styling
+  - Self-close void elements properly:
+      <input>
+      <img>
+      <br>
+
+  - Ensure all referenced ids/classes exist in markup
+
+
+CSS Rules:
+  - Use valid CSS syntax only
+  - Use kebab-case property names:
+      background-color
+      border-radius
+      justify-content
+
+  - NEVER use JS object-style CSS
+
+
+Forms:
+  - Use addEventListener('input') or submit handling
+  - NEVER read values before DOMContentLoaded
+  - Validate values inside handlers
+  - Prevent default form reload on submit
+
+
+Rendering:
+  - Initial UI must render immediately
+  - If dynamic UI exists, call render() inside init()
+  - Avoid empty containers without content"""
 
 
 _TARGET_INSTRUCTIONS = {

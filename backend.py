@@ -31,7 +31,7 @@ from pipeline import AUTO_DETECT, SUPPORTED_FRAMEWORKS, detect_source, run_pipel
 load_dotenv()
 
 
-OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
 
 Framework = Literal["Auto Detect", "React", "Vue", "Angular", "HTML"]
 ConcreteFramework = Literal["React", "Vue", "Angular", "HTML"]

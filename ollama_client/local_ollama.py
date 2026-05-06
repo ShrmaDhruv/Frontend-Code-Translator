@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL_NAME   = os.getenv("HF_MODEL_NAME", "qwen2.5-coder:3b")
-OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
 TIMEOUT_SECS = int(os.getenv("HF_TIMEOUT_SECS", "120"))
 
 OLLAMA_URL = f"{OLLAMA_BASE}/api/chat"

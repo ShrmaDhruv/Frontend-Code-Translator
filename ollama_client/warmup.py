@@ -10,7 +10,7 @@ from phi_client.phi3_client import MODEL_NAME as PHI3_MODEL
 
 load_dotenv()
 
-OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
 OLLAMA_CHAT_URL     = f"{OLLAMA_BASE_URL}/api/chat"
 OLLAMA_KEEP_ALIVE   = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 WARMUP_TIMEOUT_SECS = int(os.getenv("OLLAMA_WARMUP_TIMEOUT_SECS", "240"))
