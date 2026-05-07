@@ -84,95 +84,240 @@ Rules that always apply:
 
 
 _REACT_INSTRUCTIONS = """
+
 Target: React (functional component with hooks only)
 
-Structure rules:
-  - Use arrow function component:
+Structure Rules:
+  - Use arrow function components only:
       const ComponentName = ({ ...props }) => { ... }
+
   - Export default at bottom:
       export default ComponentName
-  - All imports at the top
 
- Strict Rules (VERY IMPORTANT):
+  - All imports must be at the top
+
+  - Component MUST return a single parent element
+
+  - Use React Fragment when multiple sections are needed:
+      <>
+        ...
+      </>
+
+  - export default must be the final JavaScript statement
+
+Strict Rules (VERY IMPORTANT):
 
 - NEVER use document.getElementById, querySelector, or direct DOM access
 - NEVER initialize state using DOM values
 - ALWAYS treat React state as the single source of truth
-- NEVER use uncontrolled inputs when using state (always bind value + onChange)
-- NEVER mutate state directly (no name = "abc")
-- ALWAYS use setter (setName)
+- NEVER use uncontrolled inputs when using state
+- ALWAYS bind:
+    value={state}
+    onChange={(e) => setState(e.target.value)}
+
+- NEVER mutate state directly
+- ALWAYS use setter functions:
+    setName(...)
+
 - NEVER use React class components
-- NEVER mix frameworks (Vue syntax, Angular, etc.)
+- NEVER mix frameworks (Vue syntax, Angular syntax, etc.)
 - NEVER forget event.preventDefault() in form submit handlers
 - NEVER leave JSX tags unclosed
+- NEVER generate empty JSX expressions:
+    {}
 
+- ONLY use valid JSX comments:
+    {/* comment */}
 
-State:
-  - const [name, setName] = useState(initialValue)
-  - Initialize with plain values only ("", 0, [], {})
+- NEVER output stray JSX outside the component
+- NEVER place CSS outside the component
+- NEVER place <style> or <style jsx> after export default
+
+State Rules:
+  - Use:
+      const [name, setName] = useState(initialValue)
+
+  - Initialize state only with plain values:
+      ""
+      0
+      []
+      {}
+
   - NEVER use DOM reads during initialization
 
+Computed Rules:
+  - Use:
+      const value = useMemo(() => expression, [deps])
 
-Computed:
-  - const value = useMemo(() => expression, [deps])
-  - Include correct dependencies array
+  - ALWAYS include proper dependency arrays
 
+Lifecycle Rules:
+  - onMount:
+      useEffect(() => { ... }, [])
 
-Lifecycle:
-  - onMount       → useEffect(() => { ... }, [])
-  - onDestroy     → useEffect(() => { return () => { ... } }, [])
-  - onUpdate      → useEffect(() => { ... })
-  - onChanges     → useEffect(() => { ... }, [deps])
+  - onDestroy:
+      useEffect(() => {
+        return () => { ... }
+      }, [])
 
+  - onUpdate:
+      useEffect(() => { ... })
 
-Props:
-  - Destructure in function signature:
+  - onChanges:
+      useEffect(() => { ... }, [deps])
+
+Props Rules:
+  - Destructure props in function signature:
       const App = ({ prop1, prop2 = defaultValue }) => {}
 
+Methods Rules:
+  - Use arrow functions:
+      const methodName = (params) => { ... }
 
-Methods:
-  - const methodName = (params) => { ... }
-  - async allowed
+  - async functions allowed
 
+Events Rules:
+  - Use JSX events only:
+      onClick={handler}
+      onChange={handler}
+      onInput={handler}
+      onSubmit={handler}
 
-Events (JSX only):
-  - onClick={handler}
-  - onChange={handler}
-  - onInput={handler}
-  - onSubmit={handler}
+  - Handler functions MUST exist
 
-  Rules:
-  - Handler MUST exist
-  - For forms: ALWAYS call event.preventDefault()
+  - Forms MUST use:
+      event.preventDefault()
+
   - NEVER use inline DOM access
-
 
 Form Handling Rules:
   - ALWAYS use controlled components:
-      value={state} + onChange={(e) => setState(e.target.value)}
+      value={state}
+      onChange={(e) => setState(e.target.value)}
+
   - NEVER read values from DOM
-  - Use .trim() ONLY during validation, not initialization
 
+  - Use .trim() ONLY during validation
 
-Template (JSX):
-  - Return JSX
-  - Use className (NOT class)
-  - Self-close tags: <input />, <br />
-  - Conditionals: {cond && <A />} or ternary
-  - Lists: items.map((item, i) => <El key={i} />)
+Template (JSX) Rules:
+  - Return valid JSX only
 
+  - Use:
+      className
 
-Error Handling:
+    NOT:
+      class
+
+  - Self-close tags:
+      <input />
+      <br />
+      <img />
+
+  - Conditionals:
+      {cond && <A />}
+      ternary operators allowed
+
+  - Lists:
+      items.map((item, i) => (
+        <Element key={i} />
+      ))
+
+Styling Rules:
+  - ALWAYS include internal styling inside the component return
+
+  - Styling MUST be rendered BEFORE the final closing Fragment/component tag
+
+  - Use this exact structure:
+
+      return (
+        <>
+          {/* JSX */}
+
+          <style>{`
+            ...
+          `}</style>
+        </>
+      )
+
+  - NEVER use:
+      <style jsx>
+
+  - NEVER use Next.js-specific styling syntax
+
+  - Generated code MUST work directly in:
+      React
+      Vite
+      Create React App
+
+  - NEVER generate external CSS files unless explicitly requested
+
+  - ALWAYS style:
+      buttons
+      inputs
+      containers
+      navbar
+      sidebar
+      cards
+      forms
+
+  - Prefer modern responsive styling with:
+      padding
+      spacing
+      border-radius
+      flex/grid layouts
+      hover effects
+
+Layout Rules:
+  - If sidebar/menu is hidden using:
+      left: -width
+
+    then desktop layout MUST restore visibility using:
+      @media (min-width: 769px) {
+        .sidebar {
+          left: 0;
+        }
+      }
+
+Error Handling Rules:
   - Store errors in state:
       const [error, setError] = useState("")
-  - Update via setError(...)
-  - Display using JSX
 
+  - Update errors using:
+      setError(...)
 
-Imports:
-  - import React from 'react'
-  - import { useState, useEffect, useMemo } from 'react' (as needed)"""
+  - Display errors using JSX
 
+Imports Rules:
+  - Always include:
+      import React from 'react'
+
+  - Import hooks only if needed:
+      import { useState, useEffect, useMemo } from 'react'
+
+Output Requirements:
+  - Generate complete runnable React code
+
+  - Include:
+      JSX
+      logic
+      styling
+
+    all in the SAME file
+
+  - Output MUST run directly in:
+      App.jsx
+
+  - NEVER output CSS outside the component
+
+  - NEVER output JSX after export default
+
+  - Ensure responsive clean UI
+
+  - Avoid placeholder-only layouts
+
+  - Ensure generated code is production-style and properly formatted
+
+"""
 
 _VUE_INSTRUCTIONS = """
 Target: Vue 3 SFC using <script setup> and Composition API only
@@ -183,7 +328,18 @@ Structure:
   </template>
 
   <script setup>
-  import { ref, computed, onMounted, onUnmounted, onUpdated, onBeforeMount, onBeforeUnmount } from 'vue'
+  import {
+    ref,
+    reactive,
+    computed,
+    watch,
+    onMounted,
+    onUnmounted,
+    onUpdated,
+    onBeforeMount,
+    onBeforeUnmount
+  } from 'vue'
+
   ...
   </script>
 
@@ -191,174 +347,555 @@ Structure:
   ...
   </style>
 
-
 Strict Rules (VERY IMPORTANT):
 
-- NEVER use document.getElementById, querySelector, or direct DOM access
-- NEVER initialize refs using DOM values
-- ALWAYS use v-model for form inputs instead of manual DOM reads
-- NEVER mix Options API (data, methods, mounted, etc.)
-- NEVER use React patterns (setState, useState, etc.)
-- NEVER import or use event names (click, input, change) from Vue
-- NEVER use watchEffect for handling DOM events
-- Every template event must reference a defined function
+- NEVER use document.getElementById
+- NEVER use querySelector
+- NEVER use direct DOM manipulation
 
+- NEVER initialize refs using DOM values
+
+- ALWAYS use reactive Vue state as source of truth
+
+- ALWAYS use v-model for forms instead of manual DOM reads
+
+- NEVER mix Options API:
+    data
+    methods
+    mounted
+    computed
+    watch
+    props
+
+- NEVER generate React patterns:
+    useState
+    setState
+    useEffect
+    className
+    JSX
+    fragments
+
+- NEVER generate Angular syntax:
+    [ngStyle]
+    *ngIf
+    *ngFor
+
+- NEVER import DOM event names from Vue
+
+- NEVER use watch/watchEffect for DOM event handling
+
+- Every template event handler MUST exist in <script setup>
+
+- NEVER generate standalone curly braces:
+    {}
+    {{}}
+    {{ }}
+    {}
+
+- Curly braces are NOT valid standalone Vue template syntax
+
+- Curly braces are ONLY allowed for valid Vue interpolation:
+    {{ value }}
+
+- NEVER use braces as:
+    placeholders
+    separators
+    comments
+    spacing markers
+
+- Invalid Vue template examples:
+    {}
+    <div>{}</div>
+    <section>{}</section>
+
+- If comments/separators are needed, use Vue comments ONLY:
+    <!-- Navbar -->
+    <!-- Hero -->
+    <!-- Cards -->
+
+- NEVER output JSX fragments or React placeholder syntax
 
 State:
-  - Each state → const name = ref(initialValue)
-  - ALWAYS initialize with plain values ("" | 0 | [] | {})
-  - NEVER use DOM to initialize state
-  - Use name.value in script, name in template
+  - Each state →
 
+      const name = ref(initialValue)
+
+  - ALWAYS initialize with plain values:
+      ""
+      0
+      []
+      {}
+      false
+
+  - NEVER initialize from DOM values
+
+  - Use:
+      name.value
+
+    inside script
+
+  - Use:
+      name
+
+    inside template
+
+  - For grouped objects:
+      const state = reactive({ ... })
 
 Computed:
-  - const name = computed(() => expression)
+  - Each computed →
 
+      const name = computed(() => expression)
+
+  - NEVER generate unnecessary computed values
 
 Lifecycle:
   - onMounted(() => { ... })
+
   - onUnmounted(() => { ... })
+
   - onUpdated(() => { ... })
+
   - onBeforeMount(() => { ... })
+
   - onBeforeUnmount(() => { ... })
 
+  - ONLY generate lifecycle hooks when real logic exists
+
+  - NEVER generate empty lifecycle hooks
 
 Props:
-  - const props = defineProps({
-      propName: { type: Type, required: boolean, default: value }
-    })
+  - Use:
 
+      const props = defineProps({
+        propName: {
+          type: Type,
+          required: boolean,
+          default: value
+        }
+      })
+
+  - NEVER mutate props directly
+
+  - If editable locally:
+      copy prop into local ref/reactive state
 
 Methods:
-  - const methodName = (params) => { ... }
-  - async allowed
+  - Each method →
 
+      const methodName = (params) => {
+        ...
+      }
+
+  - Async methods allowed:
+
+      const methodName = async () => {
+        ...
+      }
+
+  - Avoid dead code
+
+  - Avoid wrapper methods without logic
 
 Events (Template only):
-  - @click="handler"
-  - @input="handler"
-  - @change="handler"
-  - @submit.prevent="handler"
+  - click →
+      @click="handler"
+
+  - input →
+      @input="handler"
+
+  - change →
+      @change="handler"
+
+  - submit →
+      @submit.prevent="handler"
 
   Rules:
-  - Handler MUST exist in <script setup>
-  - No inline DOM access
-  - No watch/watchEffect for events
+  - Every handler MUST exist in <script setup>
 
+  - NEVER use inline DOM access
 
-Template:
-  - v-if="condition"
-  - v-for="item in items" :key="item.id"
-  - v-model="state"
-  - :prop="value"
-  - class (NOT className)
+  - NEVER use watch/watchEffect for events
 
+  - React inline state updates must become Vue expressions:
+      @click="saved = !saved"
+
+Template Rules:
+  - Conditionals:
+      v-if="condition"
+
+  - Loops:
+      v-for="item in items"
+      :key="item.id"
+
+  - Two-way binding:
+      v-model="state"
+
+  - Property bindings:
+      :prop="value"
+
+  - Use:
+      class
+
+    NOT:
+      className
+
+  - Use Vue interpolation ONLY:
+      {{ value }}
+
+  - Preserve ternary logic exactly:
+      condition ? A : B
+
+  - Vue templates MUST contain ONLY:
+      valid HTML
+      valid Vue directives
+      valid Vue interpolation
+
+  - Standalone text nodes containing:
+      {}
+      {{}}
+
+    are ALWAYS invalid and must NEVER be generated
+
+  - NEVER generate:
+      JSX syntax
+      React fragments
+      Angular directives
+      framework placeholders
+
+Style Rules:
+  - Inline style objects:
+      :style="styleObject"
+
+  - NEVER generate:
+      [style]
+      [ngStyle]
+
+  - Vue style bindings must use:
+      :style
+
+  - Example:
+
+      <div :style="containerStyle">
+
+  - Internal CSS belongs ONLY inside:
+      <style scoped>
+
+  - NEVER place raw <style> tags
+    inside <template>
+
+  - NEVER generate invalid CSS:
+      border: #2563eb;
+
+  - Correct CSS:
+      border: 2px solid #2563eb;
+
+  - NEVER use React-style CSS object keys:
+      borderRadius
+      justifyContent
+      alignItems
+
+    inside <style scoped>
+
+  - Use proper CSS syntax:
+      border-radius
+      justify-content
+      align-items
 
 Form Handling Rules:
   - ALWAYS use v-model for inputs
-  - ALWAYS validate using reactive state (ref values)
-  - NEVER read values using document.getElementById
-  - Use .trim() during validation, NOT during initialization
 
+  - ALWAYS validate using ref/reactive state
+
+  - NEVER read values using:
+      document.getElementById
+
+  - Use .trim() ONLY during validation
 
 Error Handling:
-  - Store errors in ref (e.g., const errorMsg = ref(""))
-  - Update errorMsg.value inside methods
-  - Display errors using {{ errorMsg }}
+  - Store errors in refs:
 
+      const errorMsg = ref("")
 
-Imports (only when needed):
-  ref, reactive, computed, watch,
-  onMounted, onUnmounted, onUpdated,
-  onBeforeMount, onBeforeUnmount"""
+  - Update:
+      errorMsg.value = "message"
+
+  - Display:
+      {{ errorMsg }}
+
+Imports:
+  - Import ONLY what is actually used
+
+  - Available imports:
+      ref
+      reactive
+      computed
+      watch
+      onMounted
+      onUnmounted
+      onUpdated
+      onBeforeMount
+      onBeforeUnmount
+
+Output Requirements:
+  - Generate complete runnable Vue 3 SFC code
+
+  - Must work directly in:
+      App.vue
+
+  - Use Composition API ONLY
+
+  - Use <script setup> ONLY
+
+  - Ensure valid Vue syntax
+
+  - Ensure valid template syntax
+
+  - Ensure valid scoped CSS syntax
+
+  - Remove:
+      unused imports
+      dead code
+      empty hooks
+      invalid placeholders
+      framework syntax"""
 
 
 _ANGULAR_INSTRUCTIONS = """
 Target: Angular TypeScript class component
 
 Structure:
-  import { Component } from '@angular/core'
-  - Add Input, Output, EventEmitter, and lifecycle interfaces to the
-    @angular/core import only when they are actually used
+  - Import from '@angular/core' only when needed:
+      import { Component } from '@angular/core'
 
-  @Component({
-    selector: 'app-component-name',
-    template: `...`
-  })
-  export class ComponentNameComponent {
-    ...
-  }
+  - Add Input, Output, EventEmitter, and lifecycle interfaces ONLY if used
+
+  - Use this structure:
+
+      @Component({
+        selector: 'app-component-name',
+        template: `...`
+      })
+      export class ComponentNameComponent {
+        ...
+      }
+
+  - NEVER add unused imports
+  - NEVER add empty lifecycle hooks
+  - NEVER add unnecessary boilerplate
+  - Keep component minimal and production-ready
 
 State:
-  - Each IRState entry → public name: type = init  (class field)
-  - Preserve every initial state value exactly
-  - State from React useState is local component state, not @Input()
-  - Use appropriate TypeScript types: string, number, boolean, any, T[]
+  - Each IRState entry → public name: type = init
+
+  - Preserve all initial values exactly
+
+  - React useState becomes local Angular class state
+    NOT @Input()
+
+  - Use proper TypeScript types:
+      string
+      number
+      boolean
+      any
+      T[]
 
 Computed:
-  - Each IRComputed entry → get name(): type { return expression }
-  - Getter syntax, no decorator needed
-  - Do not add getters or setters unless the source has a real derived value
-  - Remove unused or redundant getters/setters
+  - Each IRComputed entry →
+
+      get name(): type {
+        return expression
+      }
+
+  - Use getter syntax only
+  - NEVER add unnecessary getters/setters
+  - Remove redundant computed properties
 
 Lifecycle:
-  - onMount   → ngOnInit(): void { body }    implement OnInit
-  - onDestroy → ngOnDestroy(): void { body } implement OnDestroy
-  - onUpdate  → ngDoCheck(): void { body }   implement DoCheck
-  - onChanges → ngOnChanges(changes): void   implement OnChanges
-  - Add lifecycle hooks only when the original source has equivalent side
-    effects; never add ngOnInit, ngDoCheck, or other hooks for placeholder
-    initialization or empty bodies
+  - onMount →
+      ngOnInit(): void { body }
+      implement OnInit
+
+  - onDestroy →
+      ngOnDestroy(): void { body }
+      implement OnDestroy
+
+  - onUpdate →
+      ngDoCheck(): void { body }
+      implement DoCheck
+
+  - onChanges →
+      ngOnChanges(changes): void { body }
+      implement OnChanges
+
+  - ONLY add lifecycle hooks when real side effects exist
+  - NEVER generate empty hooks
 
 Props:
-  - Each IRProp → @Input() propName: type
-  - Required props have no default, optional use = defaultValue
-  - Import Input from '@angular/core'
-  - Never mutate an @Input() property directly
-  - If a received input needs local edits, copy it into local state and update
-    that local state
-  - If a state change must notify the parent, use @Output() with EventEmitter
+  - Each IRProp →
+      @Input() propName: type
+
+  - Required props:
+      no default value
+
+  - Optional props:
+      = defaultValue
+
+  - Import Input only if used
+
+  - NEVER mutate @Input() directly
+
+  - If editable locally:
+      copy @Input() into local state
 
 Outputs:
-  - EventEmitter fields → @Output() eventName = new EventEmitter<type>()
-  - Import Output, EventEmitter from '@angular/core'
-  - Add an @Output() EventEmitter when the source behavior calls a parent
-    callback or when changed input-like data needs to propagate upward
+  - Parent callbacks or upward data flow →
+
+      @Output() eventName =
+        new EventEmitter<type>()
+
+  - Import Output and EventEmitter only if used
 
 Methods:
-  - Each IRMethod → methodName(params: types): returnType { body }
-  - Async methods → async methodName(...): Promise<type> { body }
-  - Avoid dead code and redundant wrapper methods
+  - Each IRMethod →
 
-Events (in template):
-  - events.click  → (click)="handler()"
-  - events.change → (change)="handler($event)"
-  - events.input  → (input)="handler($event)"
-  - events.submit → (ngSubmit)="handler()"
-  - React onClick must become Angular (click) with the same handler logic
-  - Inline React state updates must become equivalent Angular expressions,
-    for example onClick={() => setSaved(!saved)} → (click)="saved = !saved"
+      methodName(params: types): returnType {
+        body
+      }
 
-Template:
-  - Use *ngIf="condition" for conditionals
-  - Use *ngFor="let item of items; trackBy: trackFn" for loops
-  - Use [propName]="value" for property bindings
-  - Use [(ngModel)]="stateName" for two-way binding
-  - Use class instead of className
-  - Preserve ternary order exactly: condition ? A : B must stay condition ? A : B
-  - Use Angular interpolation exactly: {{ condition ? 'A' : 'B' }}
-  - Do not flip conditional rendering logic or swap ternary branches
-  - Do not add [class], [ngClass], or extra class bindings unless the React
-    source had equivalent dynamic class behavior
-  - Do not include hex fragments, random strings, markdown artifacts, or any
-    unexpected text inside the template
+  - Async methods →
 
-Implements clause:
-  - Add OnInit if onMount lifecycle present
-  - Add OnDestroy if onDestroy lifecycle present
-  - Import all implemented interfaces from '@angular/core'
-  - Keep the component clean and minimal; no unused imports, empty hooks,
-    dead methods, extra bindings, or boilerplate"""
+      async methodName(...): Promise<type> {
+        body
+      }
+
+  - Avoid dead code
+  - Avoid wrapper methods with no logic
+
+Events (Template):
+  - click →
+      (click)="handler()"
+
+  - change →
+      (change)="handler($event)"
+
+  - input →
+      (input)="handler($event)"
+
+  - submit →
+      (ngSubmit)="handler()"
+
+  - React inline state updates must become Angular expressions:
+      (click)="saved = !saved"
+
+Template Rules:
+  - Use Angular template syntax ONLY
+
+  - Conditionals:
+      *ngIf="condition"
+
+  - Loops:
+      *ngFor="let item of items; trackBy: trackFn"
+
+  - Property bindings:
+      [prop]="value"
+
+  - Two-way binding:
+      [(ngModel)]="state"
+
+  - Use:
+      class
+
+    NOT:
+      className
+
+  - Preserve ternary logic exactly
+
+  - Use Angular interpolation:
+      {{ condition ? 'A' : 'B' }}
+
+  - NEVER inject random text, markdown, hex fragments, or artifacts
+
+  - NEVER generate:
+      {}
+      {{}}
+      stray JSX syntax
+      React fragments
+      Vue directives
+
+  - ONLY use valid Angular comments:
+      <!-- comment -->
+
+Style Rules:
+  - For style objects:
+      ALWAYS use:
+        [ngStyle]="styleObject"
+
+      NEVER use:
+        [style]="styleObject"
+
+  - [style] is ONLY for single inline CSS values
+
+  - Example:
+
+      <div [ngStyle]="containerStyle">
+
+  - NEVER place raw <style> tags inside Angular template strings
+
+  - Component CSS should use:
+      styles: [`
+        ...
+      `]
+
+    NOT:
+      styles: `
+        ...
+      `
+
+  - styles MUST always be an array
+
+  - NEVER generate invalid CSS properties like:
+      border: #2563eb;
+
+  - Correct CSS example:
+      border: 2px solid #2563eb;
+
+  - Avoid styling body{} inside Angular component CSS
+  - Prefer:
+      :host {
+        display:block;
+      }
+
+Template Cleanliness:
+  - NEVER generate empty expressions:
+      {}
+
+  - NEVER output invalid Angular syntax
+
+  - Remove placeholder artifacts completely
+
+  - Use comments instead:
+      <!-- Navbar -->
+
+Implements Clause:
+  - Add OnInit ONLY if ngOnInit exists
+  - Add OnDestroy ONLY if ngOnDestroy exists
+  - Import implemented interfaces ONLY if used
+
+Output Requirements:
+  - Generate complete runnable Angular code
+
+  - Code must work directly in:
+      app.component.ts
+
+  - Ensure template syntax is valid Angular syntax
+
+  - Ensure TypeScript is valid
+
+  - Ensure styles syntax is valid Angular syntax
+
+  - Avoid unused imports, empty hooks,
+    redundant bindings, and invalid template artifacts"""
 
 
 _HTML_INSTRUCTIONS = """
@@ -386,32 +923,84 @@ Structure:
   </body>
   </html>
 
-
 Strict Rules (VERY IMPORTANT)
 
-- NEVER use React, Vue, Angular, JSX, hooks, or framework syntax
+- NEVER use React
+- NEVER use Vue
+- NEVER use Angular
+- NEVER use JSX
+- NEVER use hooks
+- NEVER use framework syntax
+
+- NEVER generate standalone curly braces:
+    {}
+    {{}}
+    {{ }}
+    {}
+
+- Curly braces are NOT valid HTML syntax
+
+- NEVER use braces as:
+    placeholders
+    separators
+    comments
+    spacing markers
+
+- Invalid HTML examples:
+    {}
+    <div>{}</div>
+    <section>{}</section>
+
+- If comments/separators are needed, use valid HTML comments ONLY:
+    <!-- Navbar -->
+    <!-- Hero -->
+    <!-- Cards -->
+
+- Curly braces are ONLY allowed:
+    - inside actual JavaScript code
+    - inside <script> tags
+    - inside CSS blocks where syntactically required
+
+- NEVER output JSX, template syntax,
+  framework placeholders,
+  Angular directives,
+  Vue bindings,
+  or React syntax
+
 - NEVER use inline event attributes:
     onclick=""
     onchange=""
     oninput=""
     onsubmit=""
+
 - NEVER use React-style CSS:
     borderRadius
     boxShadow
     alignItems
+
   Use standard CSS:
     border-radius
     box-shadow
     align-items
 
 - NEVER use duplicate id attributes
+
 - Use class for repeated elements
+
 - NEVER access DOM elements before they exist
+
 - NEVER call addEventListener on null elements
+
 - NEVER leave empty DOMContentLoaded blocks
+
 - NEVER scatter event listeners across multiple unrelated locations
+
 - NEVER mix HTML attributes with JavaScript event systems
 
+- NEVER generate empty placeholders:
+    {}
+    <!-- empty -->
+    empty init()
 
 Initialization Rules:
   - Put ALL DOM querying and listener setup inside:
@@ -421,6 +1010,7 @@ Initialization Rules:
     });
 
   - Create a single init() function for setup
+
   - init() must:
       - query elements
       - attach listeners
@@ -433,9 +1023,12 @@ Initialization Rules:
   - Guard element usage:
 
     if (form) {
-      form.addEventListener(...)
+      form.addEventListener(...);
     }
 
+  - NEVER leave init() empty
+
+  - Remove init() entirely if no JavaScript behavior exists
 
 State:
   - Mutable state:
@@ -444,14 +1037,12 @@ State:
   - Constants:
       const API_URL = "...";
 
-
 Computed:
-  - Use functions:
+  - Use standard functions:
 
     function getTotal() {
       return price * qty;
     }
-
 
 Methods:
   - Standard functions:
@@ -465,64 +1056,79 @@ Methods:
 
     async function fetchData() {}
 
+  - Avoid dead code
+
+  - Avoid empty functions
 
 Lifecycle:
   - onMount:
-      document.addEventListener('DOMContentLoaded', () => { ... })
+
+      document.addEventListener('DOMContentLoaded', () => {
+        init();
+      });
 
   - onDestroy:
-      window.addEventListener('beforeunload', () => { ... })
+
+      window.addEventListener('beforeunload', () => {
+        ...
+      });
 
   - onUpdate:
       call render() manually after state changes
 
-
 Events:
   - Use addEventListener ONLY
 
-    button.addEventListener('click', handler)
+      button.addEventListener('click', handler);
 
   - Form submit:
 
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      handler();
-    })
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handler();
+      });
 
   - Input:
 
-    input.addEventListener('input', handler)
+      input.addEventListener('input', handler);
 
   - Change:
 
-    select.addEventListener('change', handler)
-
+      select.addEventListener('change', handler);
 
 DOM Updates:
   - Update UI manually after state changes
+
   - Use:
       element.textContent
       element.innerHTML (sparingly)
 
-  - Prefer render() for centralized updates
+  - Prefer centralized render()
 
   Example:
 
-    function render() {
-      counter.textContent = count;
-    }
+      function render() {
+        counter.textContent = count;
+      }
 
   - Every state-changing method MUST:
       - update DOM directly
       OR
       - call render()
 
-
 Template Rules:
-  - Use standard HTML elements
-  - Use class (NOT className)
+  - Use standard HTML elements only
+
+  - Use:
+      class
+
+    NOT:
+      className
+
   - Use unique ids only when needed
+
   - Use classes for reusable styling
+
   - Self-close void elements properly:
       <input>
       <img>
@@ -530,9 +1136,24 @@ Template Rules:
 
   - Ensure all referenced ids/classes exist in markup
 
+  - HTML output must contain ONLY valid HTML elements and valid text nodes
+
+  - Standalone text nodes containing:
+      {}
+      {{}}
+
+    are ALWAYS invalid and must NEVER be generated
+
+  - NEVER generate:
+      JSX syntax
+      Vue bindings
+      Angular bindings
+      React fragments
+      framework placeholders
 
 CSS Rules:
   - Use valid CSS syntax only
+
   - Use kebab-case property names:
       background-color
       border-radius
@@ -540,18 +1161,47 @@ CSS Rules:
 
   - NEVER use JS object-style CSS
 
+  - NEVER generate invalid CSS:
+      border: #2563eb;
+
+  - Correct CSS:
+      border: 2px solid #2563eb;
+
+  - CSS belongs ONLY inside:
+      <style>
 
 Forms:
   - Use addEventListener('input') or submit handling
-  - NEVER read values before DOMContentLoaded
-  - Validate values inside handlers
-  - Prevent default form reload on submit
 
+  - NEVER read values before DOMContentLoaded
+
+  - Validate values inside handlers
+
+  - Prevent default form reload on submit
 
 Rendering:
   - Initial UI must render immediately
-  - If dynamic UI exists, call render() inside init()
-  - Avoid empty containers without content"""
+
+  - If dynamic UI exists:
+      call render() inside init()
+
+  - Avoid empty containers without content
+
+Output Requirements:
+  - Generate complete runnable HTML files
+
+  - Ensure valid HTML syntax
+
+  - Ensure valid CSS syntax
+
+  - Ensure valid JavaScript syntax
+
+  - Remove:
+      unused functions
+      empty listeners
+      invalid placeholders
+      framework syntax
+      dead code"""
 
 
 _TARGET_INSTRUCTIONS = {

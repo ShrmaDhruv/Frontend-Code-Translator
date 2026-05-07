@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_NAME   = os.getenv("MODEL_NAME", "deepseek-coder:6.7b")
+MODEL_NAME   = os.getenv("MODEL_NAME", "qwen2.5-coder:14b")
 OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
 TIMEOUT_SECS = int(os.getenv("TIMEOUT_SECS", "180"))
 
