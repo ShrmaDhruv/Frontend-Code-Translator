@@ -1,28 +1,3 @@
-"""
-hf_client.py
-
-Qwen2.5-Coder-3B-Instruct client using Ollama's local REST API.
-Used by Layer 3 detection and AST extraction.
-
-Ollama exposes a chat endpoint at http://localhost:11434/api/chat.
-We POST a messages list and stream=False to get a single response object.
-
-The public interface is identical to the HuggingFace pipeline version:
-    client   = HFClient()
-    response = client.chat(messages, max_new_tokens=150)
-
-Singleton pattern ensures one HTTP session is reused across calls.
-Lazy import means the requests package is only required at runtime,
-so unit tests work without it installed.
-
-Prereqs:
-    ollama pull qwen2.5-coder:3b
-    ollama serve          # runs on localhost:11434 by default
-
-Install:
-    pip install requests python-dotenv
-"""
-
 import os
 from dotenv import load_dotenv
 

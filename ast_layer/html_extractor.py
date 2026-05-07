@@ -1,36 +1,6 @@
-"""
-html_extractor.py
-
-Pure-Python structural pre-parser for vanilla HTML/JavaScript.
-
-Splits the HTML document into its constituent parts — markup, inline
-scripts, inline styles — and extracts structural hints from each.
-The script block is parsed for variable declarations, function
-definitions, and DOM interaction patterns.
-
-Handles:
-    - Multiple inline <script> blocks (merged in order)
-    - Inline <style> blocks
-    - Element id and class attributes
-    - Inline event attributes (onclick, onchange, oninput etc.)
-    - Variable declarations (var, let, const)
-    - Function declarations and arrow functions
-    - DOM query patterns (getElementById, querySelector etc.)
-    - fetch() and XMLHttpRequest patterns
-    - localStorage / sessionStorage usage
-    - External script src references
-
-Does not handle (left for Ollama):
-    - External JS file contents
-    - Complex DOM mutation logic
-    - Event delegation patterns
-    - Template literal HTML construction
-"""
-
 import re
 
 
-# ── Document block splitting ──────────────────────────────────────────────────
 
 def split_document(code: str) -> dict:
     script_blocks = re.findall(

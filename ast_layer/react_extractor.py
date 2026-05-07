@@ -1,30 +1,3 @@
-"""
-react_extractor.py
-
-Pure-Python structural pre-parser for React components.
-
-Extracts unambiguous structural hints from React code using regex and
-string analysis. Never guesses — if a pattern is not clearly present,
-the field is left empty for Ollama to fill from the raw script block.
-
-Handles:
-    - Named and default function components
-    - Arrow function components
-    - Class components
-    - Named imports and namespace imports
-    - useState, useReducer, useRef hooks
-    - useEffect with dependency array analysis
-    - useMemo, useCallback as computed hints
-    - Prop destructuring (single-line and multi-line)
-    - React.createElement calls (no-JSX components)
-    - Event handler detection
-
-Does not handle (left for Ollama):
-    - Aliased imports  e.g.  import { useState as useLocalState }
-    - Dynamic hook patterns  e.g.  hooks stored in arrays
-    - HOC-wrapped components
-"""
-
 import re
 from typing import Optional
 

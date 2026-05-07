@@ -1,13 +1,3 @@
-"""
-layer3/response_parser.py
-
-Parses the raw string response from Ollama into a clean
-structured result. Handles all real-world failure modes.
-
-Usage:
-    from layer3.response_parser import parse_response, ParsedResponse
-"""
-
 import re
 import json
 from dataclasses import dataclass

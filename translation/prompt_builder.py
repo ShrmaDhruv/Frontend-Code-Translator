@@ -1,32 +1,3 @@
-"""
-translation/prompt_builder.py
-
-Builds Ollama prompt messages for framework translation.
-
-Takes a validated IR instance and a target framework string, and
-constructs a messages list for Phi3Client.chat(). The system prompt
-contains deep per-framework instructions so the model knows exactly
-what syntax to produce for each target.
-
-The IR is serialised as JSON and embedded in the user message.
-The model receives structured component intent — never raw source code.
-
-Supported target frameworks:
-    React    → functional component, hooks, JSX
-    Vue      → Vue 3 SFC with <script setup> and Composition API
-    Angular  → TypeScript class component with decorator
-    HTML     → vanilla HTML with inline script, no framework
-
-Per-framework instructions cover:
-    - File/component structure
-    - State management syntax
-    - Lifecycle hook mapping
-    - Event binding syntax
-    - Props/inputs syntax
-    - Computed property syntax
-    - Import requirements
-"""
-
 from ast_layer.ir_schema import IR
 
 SUPPORTED_TARGETS = {"React", "Vue", "Angular", "HTML"}

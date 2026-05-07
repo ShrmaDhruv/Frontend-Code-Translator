@@ -1,17 +1,3 @@
-"""
-layer3/cache.py
-
-SHA256-based in-memory cache for Layer 3 detection results.
-Prevents calling Ollama multiple times for identical code.
-
-Usage:
-    from layer3.cache import DetectionCache
-
-    cache = DetectionCache()
-    cache.set(code, parsed_response)
-    result = cache.get(code)   # returns None on miss
-"""
-
 import hashlib
 from layer3.response_parser import ParsedResponse
 

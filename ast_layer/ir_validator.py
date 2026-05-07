@@ -1,27 +1,3 @@
-"""
-ir_validator.py
-
-Validates an IR instance after Ollama extraction.
-
-Distinguishes critical errors (is_valid=False) from warnings
-(is_valid=True). Critical errors trigger a retry in ir_builder.
-Warnings are logged but do not block translation.
-
-Critical errors:
-    - component name is missing or empty
-    - framework is not one of the four supported values
-    - state entries missing name field
-    - prop entries missing name field
-    - method entries missing name field
-    - lifecycle hook names not in the allowed set
-
-Warnings:
-    - empty state, props, methods (may be valid for simple components)
-    - method body is empty
-    - lifecycle body is empty
-    - computed has no expression
-"""
-
 from dataclasses import dataclass, field
 from ast_layer.ir_schema import IR
 

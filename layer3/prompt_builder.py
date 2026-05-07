@@ -1,22 +1,3 @@
-"""
-layer3/prompt_builder.py
-
-Builds the engineered prompt sent to Qwen2.5-Coder-1.5B-Instruct
-for framework detection.
-
-The messages list format (system + user roles) is passed directly
-to HFClient.chat() which feeds it into tokenizer.apply_chat_template().
-
-Usage:
-    from layer3.prompt_builder import build_messages
-"""
-
-# ─────────────────────────────────────────────
-# SYSTEM PROMPT
-# Tells the model who it is, what to do,
-# and exactly what format to respond in.
-# ─────────────────────────────────────────────
-
 SYSTEM_PROMPT = """You are an expert frontend developer with deep knowledge of React, Vue, Angular, and vanilla HTML/JavaScript.
 
 Your ONLY job is to identify which frontend framework a given code snippet belongs to.

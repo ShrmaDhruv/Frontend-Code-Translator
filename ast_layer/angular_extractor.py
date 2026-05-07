@@ -1,29 +1,3 @@
-"""
-angular_extractor.py
-
-Pure-Python structural pre-parser for Angular components.
-
-Targets Angular class-based components with or without decorators.
-Handles both decorator-present and decorator-absent patterns since
-detection layer may already have identified the framework.
-
-Handles:
-    - @Component decorator (inline and separate template)
-    - Constructor dependency injection
-    - Class field declarations (typed and untyped)
-    - Lifecycle hooks (ngOnInit, ngOnDestroy, etc.)
-    - HTTP and Router service patterns
-    - @Input() and @Output() decorators
-    - EventEmitter declarations
-    - Observable subscriptions
-
-Does not handle (left for Ollama):
-    - Complex RxJS operator chains
-    - Dynamic component creation
-    - Content projection (ng-content)
-    - Directive logic
-"""
-
 import re
 from typing import Optional
 

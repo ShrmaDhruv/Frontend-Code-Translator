@@ -1,24 +1,3 @@
-"""
-translation/response_cleaner.py
-
-Extracts clean translated code from Ollama's raw response.
-
-Ollama responses for code generation tasks frequently contain:
-  - Markdown fences: ```jsx ... ``` or ```vue ... ```
-  - <think>...</think> reasoning blocks (Qwen3 models)
-  - Preamble text before the code
-  - Postamble explanation after the code
-  - Mixed language labels on fences: ```typescript, ```html etc.
-
-Three extraction strategies in order:
-  1. Fenced block   — extract content between ``` markers
-  2. Tag block      — extract content between <template> or <!DOCTYPE markers
-  3. Strip fallback — remove known non-code lines, return what remains
-
-The cleaner never modifies the code content itself — it only removes
-wrapper text. Indentation, newlines, and logic are preserved exactly.
-"""
-
 import re
 
 

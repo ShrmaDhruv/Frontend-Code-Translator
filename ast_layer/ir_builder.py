@@ -1,37 +1,3 @@
-"""
-ir_builder.py
-
-Converts a pre-parsed summary dict into a validated IR instance.
-
-Takes the output of pre_parser.py, builds an Ollama prompt that
-combines the structured summary with the raw script block, calls
-Qwen2.5-Coder-3B via OLClient, parses the JSON response into an
-IR dataclass, and validates it with ir_validator.
-
-Two-attempt strategy:
-    Attempt 1 — full prompt with summary + script block
-    Attempt 2 — if validator returns critical errors, retry with a
-                stricter prompt that explicitly lists what was wrong
-
-The model never sees raw code alone — it always sees the pre-parsed
-summary alongside the script block so it fills gaps rather than
-extracting from scratch.
-
-Flow:
-    summary dict  (from pre_parser.py)
-        ↓
-    build_prompt()
-        ↓
-    OLClient.chat()     → raw JSON string
-        ↓
-    _parse_json()       → dict
-        ↓
-    IR.from_dict()      → IR instance
-        ↓
-    ir_validator        → ValidationResult
-        ↓
-    return IR           (or retry once on critical failure)
-"""
 
 import json
 import re

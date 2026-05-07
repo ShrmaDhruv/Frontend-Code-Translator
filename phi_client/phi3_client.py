@@ -1,24 +1,3 @@
-"""
-phi3_client.py
-
-DeepSeek Coder 6.7B client using Ollama's local REST API.
-Used by the translation pipeline to generate target framework code.
-
-DeepSeek Coder is used for code translation tasks.
-It receives source-code translation prompts and returns translated code.
-
-Singleton pattern ensures one HTTP session is reused across calls.
-Lazy import means the requests package is only required at runtime,
-so unit tests work without it installed.
-
-Prereqs:
-    ollama pull deepseek-coder:6.7b
-    ollama serve          # runs on localhost:11434 by default
-
-Install:
-    pip install requests python-dotenv
-"""
-
 import os
 from dotenv import load_dotenv
 

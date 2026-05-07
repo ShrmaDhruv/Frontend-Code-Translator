@@ -1,20 +1,3 @@
-"""
-translation/test_translation.py
-
-Translation pipeline test suite — nightmare cases only.
-
-Tests cover the hardest translation paths:
-  - Vue Options API  → React  (computed, watchers, lifecycle)
-  - React hooks      → Vue 3  (useEffect deps, useMemo)
-  - Angular service  → React  (constructor injection, observables)
-  - React            → HTML   (state becomes variables, JSX becomes DOM)
-  - Vue 3 setup      → Angular (ref → class field, onMounted → ngOnInit)
-  - HTML             → React  (DOM queries → state, addEventListener → handler)
-
-Run unit tests:    python test_translation.py
-Run live tests:    python test_translation.py --live
-"""
-
 import sys
 import warnings
 from pathlib import Path

@@ -1,18 +1,3 @@
-"""
-backend.py
-
-FastAPI backend for the frontend code translation pipeline.
-
-Run:
-    uvicorn backend:app --reload --host 127.0.0.1 --port 8000
-
-Main endpoint:
-    POST /api/pipeline
-
-Pipeline:
-    detect -> AST/IR -> translate
-"""
-
 from __future__ import annotations
 
 import os

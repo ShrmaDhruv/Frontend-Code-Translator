@@ -1,28 +1,3 @@
-"""
-translation/translation_validator.py
-
-Post-translation sanity checks on the generated code.
-
-Verifies that the translated code is structurally consistent with
-the IR it was generated from. Does not parse the code — uses fast
-regex pattern matching only.
-
-Two severity levels:
-  critical  → is_valid=False  → triggers a retry in translate()
-  warning   → is_valid=True   → logged, does not block output
-
-Critical checks:
-  - Output is not empty
-  - Output does not look like the source framework (translation failed)
-  - State names from IR are present in the output
-  - Component name is present in the output
-
-Warning checks:
-  - Method names from IR are present in the output
-  - Prop names from IR are present in the output
-  - Expected framework markers are present (e.g. useState for React)
-"""
-
 import re
 from dataclasses import dataclass, field
 from ast_layer.ir_schema import IR

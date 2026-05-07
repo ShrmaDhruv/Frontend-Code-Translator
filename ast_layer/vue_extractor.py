@@ -1,35 +1,3 @@
-"""
-vue_extractor.py
-
-Pure-Python structural pre-parser for Vue 2 and Vue 3 components.
-
-Handles both Options API (Vue 2 / Vue 3) and Composition API with
-<script setup> (Vue 3). SFC blocks are split before any analysis.
-
-Vue 2 / Options API patterns:
-    data()           → state hints
-    computed: {}     → computed hints
-    methods: {}      → method hints
-    watch: {}        → watch hints
-    props: []/{}}    → prop hints
-    lifecycle hooks  → onMount, onDestroy etc.
-
-Vue 3 Composition API (<script setup>):
-    ref()            → state hints
-    reactive()       → state hints
-    computed()       → computed hints
-    watch/watchEffect → watch hints
-    defineProps()    → prop hints
-    onMounted()      → lifecycle hints
-    onUnmounted()    → lifecycle hints
-
-Does not handle (left for Ollama):
-    - Complex render functions
-    - Mixins and extends
-    - Dynamic component registration
-    - Scoped slots with complex logic
-"""
-
 import re
 from typing import Optional
 

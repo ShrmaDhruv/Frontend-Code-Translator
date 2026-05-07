@@ -1,32 +1,3 @@
-"""
-pre_parser.py
-
-Framework router for structural pre-parsing.
-
-Receives raw source code and a detected framework string, dispatches
-to the correct framework extractor, and returns a unified summary dict.
-
-The summary dict is always the same shape regardless of source framework.
-Fields not extractable by regex are left as empty lists or empty strings —
-Ollama fills them from the raw script_block during IR completion.
-
-Flow:
-    raw code + framework
-        ↓
-    framework extractor  (react / vue / angular / html)
-        ↓
-    unified summary dict
-        ↓
-    ir_builder.py        (Ollama call → IR)
-
-Usage:
-    from ast_layer.pre_parser import parse
-
-    summary = parse(code, "Vue")
-    print(summary["state_hints"])
-    print(summary["script_block"])
-"""
-
 from ast_layer import react_extractor
 from ast_layer import vue_extractor
 from ast_layer import angular_extractor

@@ -1,30 +1,3 @@
-"""
-pipeline.py
-
-Project-level orchestration for:
-
-    detection -> AST/IR extraction -> translation
-
-This file does not replace the existing layers. It wires them together:
-
-    testing.detector.detect()     -> fast rule-based framework detection
-    layer3.detect_with_llm()      -> optional LLM detection for ambiguous input
-    ast_layer.extract_ir()        -> source code to validated IR
-    translation.translate_ir()    -> IR to target framework code
-
-Usage from Python:
-
-    from pipeline import run_pipeline
-
-    result = run_pipeline(code, target="Vue")
-    print(result.translated_code)
-
-Usage from terminal:
-
-    python pipeline.py input.jsx --target Vue
-    python pipeline.py input.vue --source Vue --target React --show-ir
-"""
-
 from __future__ import annotations
 
 import argparse

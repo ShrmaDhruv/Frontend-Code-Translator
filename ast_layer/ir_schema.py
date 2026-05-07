@@ -1,23 +1,3 @@
-"""
-ir_schema.py
-
-Framework-agnostic Intermediate Representation for frontend components.
-
-All source frameworks (React, Vue, Angular, HTML) normalise into this
-schema before translation. The LLM receives an IR instance serialised
-as JSON and writes the target framework from it — never from raw code.
-
-Normalisations applied during extraction:
-    className        → class
-    onClick          → events.click
-    useState(x)      → IRState(name, init=x)
-    useEffect(fn,[]) → IRLifecycle(hook="onMount")
-    ref(x)           → IRState(name, init=x)          [Vue 3]
-    computed(fn)     → IRComputed(name, expression)   [Vue 3]
-    ngOnInit()       → IRLifecycle(hook="onMount")    [Angular]
-    ngOnDestroy()    → IRLifecycle(hook="onDestroy")  [Angular]
-"""
-
 from dataclasses import dataclass, field, asdict
 from typing     import Optional
 import json

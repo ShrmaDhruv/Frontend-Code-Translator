@@ -1,17 +1,3 @@
-"""
-layer3/score_merger.py
-
-Layer 3 always prevails when called.
-
-Logic:
-  - Layer 3 answer is always the final decision
-  - Only ask user when Layer 3 itself says confidence is "low"
-  - Layer 1 scores are only used to show what Layer 1 thought (for debugging)
-
-Usage:
-    from layer3.score_merger import merge_results, MergedResult
-"""
-
 from dataclasses import dataclass
 from layer3.response_parser import ParsedResponse
 
