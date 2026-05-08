@@ -36,10 +36,10 @@ class Phi3Client:
             probe.raise_for_status()
             self._session = session
             self._loaded  = True
-            print("DeepSeek Coder connection ready.")
+            print(f"{MODEL_NAME} connection ready.")
 
         except Exception as e:
-            raise RuntimeError(f"[Phi3Client] Ollama unreachable at {OLLAMA_BASE}: {e}")
+            raise RuntimeError(f"Ollama unreachable at {OLLAMA_BASE}: {e}")
 
     def chat(
         self,
@@ -68,7 +68,7 @@ class Phi3Client:
             response.raise_for_status()
 
         except Exception as e:
-            raise RuntimeError(f"[DeepseekClient] Ollama request failed: {e}")
+            raise RuntimeError(f"Ollama request failed: {e}")
 
         return response.json()["message"]["content"].strip()
 

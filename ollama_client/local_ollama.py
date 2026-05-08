@@ -39,7 +39,7 @@ class OLClient:
             print("Ollama connection ready.")
 
         except Exception as e:
-            raise RuntimeError(f"[HFClient] Ollama unreachable at {OLLAMA_BASE}: {e}")
+            raise RuntimeError(f"Ollama unreachable at {OLLAMA_BASE}: {e}")
 
     def chat(
         self,
@@ -68,7 +68,7 @@ class OLClient:
             response.raise_for_status()
 
         except Exception as e:
-            raise RuntimeError(f"[HFClient] Ollama request failed: {e}")
+            raise RuntimeError(f" Ollama request failed: {e}")
 
         return response.json()["message"]["content"].strip()
 
