@@ -5,7 +5,7 @@ services:
     image: ollama/ollama
     container_name: ollama-dhruv
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ~/.ollama:/root/.ollama
     deploy:
