@@ -5,9 +5,11 @@ from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+import fastapi
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ollama_client.warmup import REQUIRED_MODELS, warm_required_models
@@ -60,7 +62,7 @@ OLLAMA_WARMUP_STATUS: list[dict] = []
 @app.on_event("startup")
 def load_ollama_models_on_startup() -> None:
     global OLLAMA_WARMUP_STATUS
-
+    results=[]
     print(f"Loading required Ollama models: {', '.join(REQUIRED_MODELS)}")
     try:
         results = warm_required_models()
@@ -75,6 +77,8 @@ def load_ollama_models_on_startup() -> None:
         ]
         print(f"Ollama warm-up failed; API will start and report runtime errors as needed. {exc}")
         return
+    except Exception as e:
+        print(f"[ERROR] Unexpected startup error: {e}")
 
     OLLAMA_WARMUP_STATUS = [
         {"model": result.model, "ok": result.ok, "message": result.message}
@@ -138,7 +142,7 @@ async def pipeline_endpoint(payload: PipelineRequest) -> dict:
 async def translate_endpoint(payload: PipelineRequest) -> dict:
     return await _run_pipeline_endpoint(payload, stop_after="translate")
 
-
+app.mount("/", StaticFiles(directory="dist", html=True), name="dist")
 async def _run_pipeline_endpoint(payload: PipelineRequest, stop_after: StopAfter) -> dict:
     try:
         result = await run_in_threadpool(

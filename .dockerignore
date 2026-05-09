@@ -1,0 +1,12 @@
+venv/
+*__pycache__/
+node_modules/
+.npm-cache/
+.parcel-cache/
+.parcel-tmp/
+dist/
+frontend-dev.log
+frontend-dev.err
+frontend-static.log
+frontend-static.err
+/.env

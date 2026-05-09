@@ -1,4 +1,5 @@
-export const API_URL = "http://127.0.0.1:8000/api/pipeline";
+// export const API_URL = "http://127.0.0.1:8000/api/pipeline";
+export const API_URL = "/api/pipeline";
 
 export const SOURCE_OPTIONS = ["Auto Detect", "React", "Vue", "Angular", "HTML"];
 

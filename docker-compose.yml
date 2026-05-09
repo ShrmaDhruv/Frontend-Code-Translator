@@ -7,10 +7,20 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - C:\Users\DHRUV\.ollama:/root/.ollama
+      - ~/.ollama:/root/.ollama
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
     restart: unless-stopped
+  backend-service:
+    build: ./
+    image: frontend-convertor-app:v1
+    container_name: frontend-convertor-app-container
+    ports:
+      - "80:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama-service:11434/
+    depends_on:
+      - ollama-service
