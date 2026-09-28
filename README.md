@@ -60,7 +60,6 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 │   ├── package.json
 │   ├── scripts/                # Parcel dev/build runner
 │   └── src/                    # React frontend application
-├── claude-logs/                # Session logs and planning notes
 ├── dockerfile                  # Multi-stage frontend/backend Docker build
 └── docker-compose.yml          # Backend + Ollama service setup
 ```
