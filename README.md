@@ -40,20 +40,29 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 
 ```text
 .
-├── App.jsx                    # React entry point
-├── index.html                 # Parcel HTML entry
-├── backend.py                 # FastAPI backend server
-├── pipeline.py                # Main detection → IR → translation orchestrator
-├── ast_layer/                 # Framework extractors and IR builder/schema/validator
-├── layer3/                    # LLM fallback detection for ambiguous inputs
-├── ollama_client/             # Ollama client and model warmup helpers
-├── phi_client/                # Translation model client wrapper
-├── rules/                     # Regex-based framework detection rules
-├── src/                       # React frontend application
-├── testing/                   # Tests and detection utilities
-├── translation/               # Translation prompt, cleaner, validator, and tests
-├── dockerfile                 # Multi-stage frontend/backend Docker build
-└── docker-compose.yml         # Backend + Ollama service setup
+├── backend/
+│   ├── requirements.txt        # Python dependencies
+│   ├── app/
+│   │   ├── main.py             # FastAPI backend server (app = FastAPI())
+│   │   ├── pipeline.py         # Main detection → IR → translation orchestrator
+│   │   ├── detector.py         # Layer 1 rule-based framework detection engine
+│   │   ├── hf_client.py        # Legacy HF/transformers client (not on the runtime path)
+│   │   ├── ast_layer/          # Framework extractors and IR builder/schema/validator
+│   │   ├── layer3/             # LLM fallback detection for ambiguous inputs
+│   │   ├── ollama_client/      # Ollama client and model warmup helpers
+│   │   ├── phi_client/         # Translation model client wrapper
+│   │   ├── rules/              # Regex-based framework detection rules
+│   │   └── translation/        # Translation prompt, cleaner, and validator
+│   └── tests/                  # Python test suite (pytest)
+├── frontend/
+│   ├── App.jsx                 # React entry point
+│   ├── index.html              # Parcel HTML entry
+│   ├── package.json
+│   ├── scripts/                # Parcel dev/build runner
+│   └── src/                    # React frontend application
+├── claude-logs/                # Session logs and planning notes
+├── dockerfile                  # Multi-stage frontend/backend Docker build
+└── docker-compose.yml          # Backend + Ollama service setup
 ```
 
 ## How the Pipeline Works
@@ -89,28 +98,38 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 ### Install Frontend Dependencies
 
 ```bash
+cd frontend
 npm install
 ```
 
 ### Install Backend Dependencies
 
 ```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate   # or `source venv/bin/activate` on macOS/Linux
 pip install -r requirements.txt
 ```
 
 ### Run the Frontend
 
 ```bash
+cd frontend
 npm run dev
 ```
 
 ### Run the Backend
 
+Run from inside `backend/`, so the `app` package resolves correctly:
+
 ```bash
-uvicorn backend:app --host 0.0.0.0 --port 8000
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-By default, the frontend calls `/api/pipeline`. If running frontend and backend separately, configure your dev proxy or update `src/constants.js` to point to your backend URL.
+By default, the frontend calls `/api/pipeline`. If running frontend and backend separately, configure your dev proxy or update `frontend/src/constants.js` to point to your backend URL.
+
+The CLI pipeline entry point (`backend/app/pipeline.py`) should likewise be run as a module from inside `backend/`: `python -m app.pipeline <file> --target Vue`.
 
 ## Running with Docker
 
@@ -127,9 +146,10 @@ The backend is exposed on port `80` by the provided compose file.
 
 ## Testing
 
-Run the Python test suite:
+Run the Python test suite from `backend/`:
 
 ```bash
+cd backend
 python -m pytest -q
 ```
 
