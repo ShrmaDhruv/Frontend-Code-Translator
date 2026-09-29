@@ -1,5 +1,7 @@
 import re
 
+from app.translation import empty_functions
+from app.translation.imports import add_missing_imports
 
 _FENCE_LANGUAGES = {
     "react", "vue", "angular", "html", "javascript", "typescript",
@@ -153,13 +155,42 @@ def _prune_unused_angular_imports(code: str) -> str:
     )
 
 
+_ANGULAR_HOOK_INTERFACES = {
+    "OnInit": "ngOnInit",
+    "OnDestroy": "ngOnDestroy",
+    "OnChanges": "ngOnChanges",
+    "DoCheck": "ngDoCheck",
+    "AfterViewInit": "ngAfterViewInit",
+    "AfterContentInit": "ngAfterContentInit",
+}
+
+
+def _prune_angular_implements(code: str) -> str:
+    """Drop lifecycle interfaces whose hook method no longer exists (e.g. after an empty ngOnInit was removed)."""
+    def replace(match: re.Match) -> str:
+        kept = [
+            name.strip() for name in match.group(1).split(",")
+            if name.strip() and not (
+                name.strip() in _ANGULAR_HOOK_INTERFACES
+                and not re.search(rf'\b{_ANGULAR_HOOK_INTERFACES[name.strip()]}\s*\(', code)
+            )
+        ]
+        return f" implements {', '.join(kept)} " if kept else " "
+
+    return re.sub(r'\s+implements\s+([\w\s,]+?)\s*(?=\{)', replace, code)
+
+
 def _sanitize_output(code: str, target_framework: str) -> str:
     code = _remove_comments(code)
-    code = _remove_empty_placeholders(code)
     code = _remove_artifact_lines(code)
+    # Empty functions first: removing their calls can leave empty lifecycle hooks behind.
+    code = empty_functions.remove(code)
+    code = _remove_empty_placeholders(code)
+    code = add_missing_imports(code, target_framework)
     if target_framework == "Vue":
         code = _prune_unused_vue_imports(code)
     if target_framework == "Angular":
+        code = _prune_angular_implements(code)
         code = _prune_unused_angular_imports(code)
     return code.strip()
 

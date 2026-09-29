@@ -1,6 +1,9 @@
 import re
 from dataclasses import dataclass, field
 from app.ast_layer.ir_schema import IR
+from app.translation import empty_functions
+from app.translation.imports import find_missing
+from app.translation.template_refs import undefined_template_refs
 
 
 _FRAMEWORK_MARKERS = {
@@ -85,34 +88,6 @@ _VUE_ALLOWED_IMPORTS = {
 }
 
 
-_REACT_HOOKS = {
-    "useState", "useEffect", "useMemo", "useCallback", "useRef",
-    "useReducer", "useContext", "useLayoutEffect",
-}
-
-
-def _named_imports(code: str, module: str) -> set[str]:
-    names = set()
-    for match in re.finditer(rf'import\s+(?:\w+\s*,\s*)?\{{([^}}]+)\}}\s*from\s*["\']{module}["\']', code):
-        names.update(
-            item.strip().split(" as ", 1)[-1].strip()
-            for item in match.group(1).split(",")
-            if item.strip()
-        )
-    return names
-
-
-def _missing_imports(code: str, apis: set[str], imported: set[str]) -> list[str]:
-    """APIs called bare (not as obj.api) that are neither imported nor defined locally."""
-    missing = []
-    for api in sorted(apis - imported):
-        called = re.search(rf'(?<![.\w]){api}\s*\(', code)
-        defined = re.search(rf'\b(?:function|const|let|var)\s+{api}\b', code)
-        if called and not defined:
-            missing.append(api)
-    return missing
-
-
 def _validate_vue_imports(code: str, errors: list[str]) -> None:
     for match in re.finditer(r'import\s*\{([^}]+)\}\s*from\s*["\']vue["\']', code):
         raw_specifiers = match.group(1).split(",")
@@ -128,14 +103,13 @@ def _validate_vue_imports(code: str, errors: list[str]) -> None:
                 f"{', '.join(invalid)}"
             )
 
-    script = "\n".join(re.findall(r'<script[^>]*>([\s\S]*?)</script>', code))
-    missing = _missing_imports(script, _VUE_ALLOWED_IMPORTS, _named_imports(code, "vue"))
+    missing = find_missing(code, "Vue")
     if missing:
         errors.append(f"output uses Vue API(s) without importing them from 'vue': {', '.join(missing)}")
 
 
 def _validate_react_imports(code: str, errors: list[str]) -> None:
-    missing = _missing_imports(code, _REACT_HOOKS, _named_imports(code, "react"))
+    missing = find_missing(code, "React")
     if missing:
         errors.append(f"output uses React hook(s) without importing them from 'react': {', '.join(missing)}")
 
@@ -597,12 +571,32 @@ def validate_translation(
                 f"output is missing required {target_framework} structure marker '{marker}'"
             )
 
+    for name in empty_functions.names(code):
+        errors.append(
+            f"function '{name}' has an empty body; implement it, or remove it and every call to it"
+        )
+
     if target_framework == "React":
         _validate_react_imports(code, errors)
 
     if target_framework == "Vue":
         _validate_vue_imports(code, errors)
         _validate_vue_event_handlers(code, errors)
+
+    if target_framework in ("React", "Vue", "Angular"):
+        dom_calls = sorted(set(re.findall(
+            r'\bdocument\.(getElementById|querySelector(?:All)?|getElementsBy\w+|createElement)\s*\(', code,
+        )))
+        if dom_calls:
+            errors.append(
+                f"{target_framework} output uses document.{', document.'.join(dom_calls)}; "
+                "use component state and template rendering instead of DOM APIs"
+            )
+
+    for name in undefined_template_refs(code, target_framework):
+        errors.append(
+            f"template references '{name}', which is not defined in the component"
+        )
 
     if target_framework == "Angular":
         _validate_angular_output(code, ir, errors)

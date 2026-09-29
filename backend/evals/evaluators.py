@@ -102,6 +102,9 @@ def judge_model() -> str:
     return os.getenv("JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
 
 
+# Short on purpose: a longer "trace step by step" prompt measured worse on the
+# calibration set (gemma3:12b rationalised buggy code into passes; bug recall 0/7
+# vs 3/7). Re-run `python -m evals.calibrate_judge` before changing it.
 _JUDGE_SYSTEM = """You are a strict reviewer of frontend code translations.
 You receive a source component, its translation into another framework, and a
 list of required behaviors. For each behavior, decide whether the TRANSLATED
@@ -110,8 +113,29 @@ actual logic; do not assume behavior that is not in the code. Idiomatic
 differences between frameworks are fine as long as the behavior matches.
 
 Respond with JSON only, in this shape:
-{"verdicts": [{"behavior": 1, "pass": true, "reason": "short reason"}, ...]}
-Include exactly one verdict per behavior, numbered as given."""
+{"verdicts": [{"behavior": 1, "reasoning": "short reason", "pass": true}, ...]}
+Include exactly one verdict per behavior, numbered as given. Inside "reasoning",
+quote code with backticks or single quotes, never with double quotes."""
+
+
+_JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdicts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "behavior":  {"type": "integer"},
+                    "reasoning": {"type": "string"},
+                    "pass":      {"type": "boolean"},
+                },
+                "required": ["behavior", "reasoning", "pass"],
+            },
+        },
+    },
+    "required": ["verdicts"],
+}
 
 
 def _judge_chat(messages: list[dict]) -> str:
@@ -127,8 +151,8 @@ def _judge_chat(messages: list[dict]) -> str:
             "model": judge_model(),
             "messages": messages,
             "stream": False,
-            "format": "json",
-            "options": {"temperature": 0, "num_ctx": 8192},
+            "format": _JUDGE_SCHEMA,
+            "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 3000},
         },
         int(os.getenv("JUDGE_TIMEOUT_SECS", "300")),
     )
@@ -136,45 +160,67 @@ def _judge_chat(messages: list[dict]) -> str:
     return response.json()["message"]["content"]
 
 
-def behavior_judge(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
-    translated = (outputs or {}).get("translated_code") or ""
+def judge_verdicts(
+    source_code: str,
+    target: str,
+    translated: str,
+    reference_outputs: dict,
+    system_prompt: str | None = None,
+) -> tuple[list[dict] | None, str]:
+    """
+    Ask the judge for one verdict per behavior.
+
+    Returns (verdicts, raw). `verdicts` is None when the judge output is unusable
+    (not JSON, or missing any behavior); a judge failure is not a translation failure.
+    """
     behaviors = reference_outputs["behaviors"]
-
-    if not translated.strip():
-        return {"key": "behavior_pass_rate", "score": 0.0, "comment": "no translated code produced"}
-
     numbered = "\n".join(f"{i}. {b}" for i, b in enumerate(behaviors, start=1))
     user = (
         f"Source framework: {reference_outputs['expected_source']}\n"
-        f"Target framework: {inputs['target']}\n\n"
+        f"Target framework: {target}\n\n"
         f"Note: {reference_outputs.get('judge_notes', '')}\n\n"
-        f"SOURCE CODE:\n```\n{inputs['code']}\n```\n\n"
+        f"SOURCE CODE:\n```\n{source_code}\n```\n\n"
         f"TRANSLATED CODE:\n```\n{translated}\n```\n\n"
         f"REQUIRED BEHAVIORS:\n{numbered}"
     )
-
     raw = _judge_chat([
-        {"role": "system", "content": _JUDGE_SYSTEM},
+        {"role": "system", "content": system_prompt or _JUDGE_SYSTEM},
         {"role": "user", "content": user},
     ])
 
     try:
-        verdicts = json.loads(raw)["verdicts"]
-        by_number = {int(v["behavior"]): v for v in verdicts}
+        by_number = {int(v["behavior"]): v for v in json.loads(raw)["verdicts"]}
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-        return {"key": "behavior_pass_rate", "score": None, "comment": f"unparseable judge output: {raw[:300]}"}
+        return None, raw
 
-    passed, failures = 0, []
+    verdicts = []
     for i, behavior in enumerate(behaviors, start=1):
         verdict = by_number.get(i)
-        if verdict and verdict.get("pass") is True:
-            passed += 1
-        else:
-            reason = verdict.get("reason", "") if verdict else "no verdict returned"
-            failures.append(f"[{i}] {behavior} -> {reason}")
+        if verdict is None or not isinstance(verdict.get("pass"), bool):
+            return None, raw
+        verdicts.append({
+            "behavior": behavior,
+            "pass": verdict["pass"],
+            "reason": verdict.get("reasoning") or verdict.get("reason") or "",
+        })
+    return verdicts, raw
 
+
+def behavior_judge(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
+    translated = (outputs or {}).get("translated_code") or ""
+    if not translated.strip():
+        return {"key": "behavior_pass_rate", "score": 0.0, "comment": "no translated code produced"}
+
+    verdicts, raw = judge_verdicts(inputs["code"], inputs["target"], translated, reference_outputs)
+    if verdicts is None:
+        return {"key": "behavior_pass_rate", "score": None, "comment": f"unusable judge output: {raw[:300]}"}
+
+    failures = [
+        f"[{i}] {v['behavior']} -> {v['reason']}"
+        for i, v in enumerate(verdicts, start=1) if not v["pass"]
+    ]
     return {
         "key": "behavior_pass_rate",
-        "score": passed / len(behaviors),
+        "score": sum(v["pass"] for v in verdicts) / len(verdicts),
         "comment": "all behaviors pass" if not failures else "\n".join(failures)[:2000],
     }
