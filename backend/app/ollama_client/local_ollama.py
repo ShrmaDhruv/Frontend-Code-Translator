@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 
+from app.ollama_client.retry import post_with_retry
+
 load_dotenv()
 
 MODEL_NAME   = os.getenv("HF_MODEL_NAME", "qwen2.5-coder:3b")
@@ -60,11 +62,7 @@ class OLClient:
         }
 
         try:
-            response = self._session.post(
-                OLLAMA_URL,
-                json    = payload,
-                timeout = TIMEOUT_SECS,
-            )
+            response = post_with_retry(self._session, OLLAMA_URL, payload, TIMEOUT_SECS)
             response.raise_for_status()
 
         except Exception as e:

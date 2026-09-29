@@ -4,3 +4,7 @@ fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-dotenv
 langsmith
+tree-sitter>=0.25
+tree-sitter-javascript>=0.25
+tree-sitter-typescript>=0.23
+tree-sitter-html>=0.23

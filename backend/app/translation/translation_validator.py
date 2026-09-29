@@ -29,11 +29,14 @@ _FRAMEWORK_MARKERS = {
     ],
 }
 
+# Bare setX( calls (useState setters); skips browser timers and method calls like el.setAttribute(
+_REACT_SETTER = r'(?<![.\w])set(?!(?:Interval|Timeout|Immediate)\b)[A-Z]\w+\s*\('
+
 _ANTI_MARKERS = {
     "React":   [r'<template>', r'ngOnInit', r'<!DOCTYPE'],
-    "Vue":     [r'useState\b', r'\bset[A-Z]\w+\s*\(', r'ngOnInit', r'<!DOCTYPE'],
-    "Angular": [r'<template>', r'useState\b', r'\bset[A-Z]\w+\s*\(', r'<!DOCTYPE'],
-    "HTML":    [r'useState\b', r'\bset[A-Z]\w+\s*\(', r'<template>', r'ngOnInit'],
+    "Vue":     [r'useState\b', _REACT_SETTER, r'ngOnInit', r'<!DOCTYPE'],
+    "Angular": [r'<template>', r'useState\b', _REACT_SETTER, r'<!DOCTYPE'],
+    "HTML":    [r'useState\b', _REACT_SETTER, r'<template>', r'ngOnInit'],
 }
 
 _REQUIRED_MARKERS = {
@@ -82,6 +85,34 @@ _VUE_ALLOWED_IMPORTS = {
 }
 
 
+_REACT_HOOKS = {
+    "useState", "useEffect", "useMemo", "useCallback", "useRef",
+    "useReducer", "useContext", "useLayoutEffect",
+}
+
+
+def _named_imports(code: str, module: str) -> set[str]:
+    names = set()
+    for match in re.finditer(rf'import\s+(?:\w+\s*,\s*)?\{{([^}}]+)\}}\s*from\s*["\']{module}["\']', code):
+        names.update(
+            item.strip().split(" as ", 1)[-1].strip()
+            for item in match.group(1).split(",")
+            if item.strip()
+        )
+    return names
+
+
+def _missing_imports(code: str, apis: set[str], imported: set[str]) -> list[str]:
+    """APIs called bare (not as obj.api) that are neither imported nor defined locally."""
+    missing = []
+    for api in sorted(apis - imported):
+        called = re.search(rf'(?<![.\w]){api}\s*\(', code)
+        defined = re.search(rf'\b(?:function|const|let|var)\s+{api}\b', code)
+        if called and not defined:
+            missing.append(api)
+    return missing
+
+
 def _validate_vue_imports(code: str, errors: list[str]) -> None:
     for match in re.finditer(r'import\s*\{([^}]+)\}\s*from\s*["\']vue["\']', code):
         raw_specifiers = match.group(1).split(",")
@@ -96,6 +127,17 @@ def _validate_vue_imports(code: str, errors: list[str]) -> None:
                 "output imports invalid Vue symbol(s): "
                 f"{', '.join(invalid)}"
             )
+
+    script = "\n".join(re.findall(r'<script[^>]*>([\s\S]*?)</script>', code))
+    missing = _missing_imports(script, _VUE_ALLOWED_IMPORTS, _named_imports(code, "vue"))
+    if missing:
+        errors.append(f"output uses Vue API(s) without importing them from 'vue': {', '.join(missing)}")
+
+
+def _validate_react_imports(code: str, errors: list[str]) -> None:
+    missing = _missing_imports(code, _REACT_HOOKS, _named_imports(code, "react"))
+    if missing:
+        errors.append(f"output uses React hook(s) without importing them from 'react': {', '.join(missing)}")
 
 
 def _validate_vue_event_handlers(code: str, errors: list[str]) -> None:
@@ -204,9 +246,19 @@ _ANGULAR_LIFECYCLE_TO_IR = {
 }
 
 
+_CLEANUP_CALL = r'\b(?:clearInterval|clearTimeout|removeEventListener|unsubscribe|disconnect)\s*\('
+
+
+def _angular_destroy_is_cleanup(code: str) -> bool:
+    body = re.search(r'\bngOnDestroy\s*\([^)]*\)[^{]*\{([^}]*)\}', code)
+    return bool(body and re.search(_CLEANUP_CALL, body.group(1)))
+
+
 def _validate_angular_lifecycle(code: str, ir: IR, errors: list[str]) -> None:
     allowed_hooks = {item.hook for item in ir.lifecycle if item.hook}
     for hook, ir_hook in _ANGULAR_LIFECYCLE_TO_IR.items():
+        if hook == "ngOnDestroy" and _angular_destroy_is_cleanup(code):
+            continue
         if re.search(rf'\b{hook}\s*\(', code) and ir_hook not in allowed_hooks:
             errors.append(
                 f"Angular output adds {hook} without matching source lifecycle behavior"
@@ -448,7 +500,7 @@ def _has_null_guard(script: str, name: str) -> bool:
     )
 
 
-def _validate_html_safe_dom_access(code: str, errors: list[str]) -> None:
+def _validate_html_safe_dom_access(code: str, warnings: list[str]) -> None:
     script = "\n".join(block for _, block in _html_scripts(code))
     direct_unsafe = re.search(
         r'document\.(?:getElementById|querySelector|querySelectorAll|getElementsByClassName)'
@@ -456,7 +508,7 @@ def _validate_html_safe_dom_access(code: str, errors: list[str]) -> None:
         script,
     )
     if direct_unsafe:
-        errors.append("JavaScript uses direct DOM access without a null guard")
+        warnings.append("JavaScript uses direct DOM access without a null guard")
 
     assignments = re.findall(
         r'\b(?:const|let|var)\s+(\w+)\s*=\s*document\.'
@@ -469,17 +521,17 @@ def _validate_html_safe_dom_access(code: str, errors: list[str]) -> None:
             script,
         )
         if unsafe_use and not _has_null_guard(script, name):
-            errors.append(f"DOM element '{name}' is used without a null guard")
+            warnings.append(f"DOM element '{name}' is used without a null guard")
 
 
-def _validate_html_output(code: str, ir: IR, errors: list[str]) -> None:
+def _validate_html_output(code: str, ir: IR, errors: list[str], warnings: list[str]) -> None:
     _validate_html_viewport(code, errors)
     _validate_html_dom_consistency(code, errors)
     _validate_html_timing(code, errors)
     _validate_html_initialization(code, errors)
     _validate_html_event_binding(code, errors)
     _validate_html_state_rendering(code, ir, errors)
-    _validate_html_safe_dom_access(code, errors)
+    _validate_html_safe_dom_access(code, warnings)
 
 
 @dataclass
@@ -545,6 +597,9 @@ def validate_translation(
                 f"output is missing required {target_framework} structure marker '{marker}'"
             )
 
+    if target_framework == "React":
+        _validate_react_imports(code, errors)
+
     if target_framework == "Vue":
         _validate_vue_imports(code, errors)
         _validate_vue_event_handlers(code, errors)
@@ -553,7 +608,7 @@ def validate_translation(
         _validate_angular_output(code, ir, errors)
 
     if target_framework == "HTML":
-        _validate_html_output(code, ir, errors)
+        _validate_html_output(code, ir, errors, warnings)
 
     if target_framework in ("React", "Angular") and ir.component and ir.component != "App":
         if ir.component not in code:

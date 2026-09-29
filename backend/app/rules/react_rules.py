@@ -130,7 +130,7 @@ REACT_RULES: list[Rule] = [
     ),
     Rule(
         id="react_usestate_setter",
-        pattern=re.compile(r'\bset[A-Z]\w+\s*\(', re.MULTILINE),
+        pattern=re.compile(r'(?<![.\w])set(?!(?:Interval|Timeout|Immediate)\b)[A-Z]\w+\s*\(', re.MULTILINE),
         weight=3,
         reason="setX() naming convention for useState setters."
     ),

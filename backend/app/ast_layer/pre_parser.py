@@ -1,11 +1,20 @@
+import logging
+import os
+
 from app.ast_layer import react_extractor
 from app.ast_layer import vue_extractor
 from app.ast_layer import angular_extractor
 from app.ast_layer import html_extractor
+from app.ast_layer import treesitter
+
+log = logging.getLogger(__name__)
 
 SUPPORTED_FRAMEWORKS = {"React", "Vue", "Angular", "HTML"}
 
-_EXTRACTORS = {
+# "tree-sitter" (default) or "regex" (legacy extractors, kept as fallback and for eval comparison)
+AST_PARSER = os.getenv("AST_PARSER", "tree-sitter")
+
+_REGEX_EXTRACTORS = {
     "React":   react_extractor.extract,
     "Vue":     vue_extractor.extract,
     "Angular": angular_extractor.extract,
@@ -33,9 +42,14 @@ def parse(code: str, framework: str) -> dict:
             f"Expected one of: {', '.join(sorted(SUPPORTED_FRAMEWORKS))}"
         )
 
-    extractor = _EXTRACTORS[framework]
-    summary   = extractor(code)
+    if os.getenv("AST_PARSER", AST_PARSER) != "regex":
+        try:
+            return _normalise(treesitter.extract(code, framework), framework)
+        except Exception as exc:
+            log.warning("tree-sitter extraction failed for %s, using regex: %s", framework, exc)
 
+    summary = _REGEX_EXTRACTORS[framework](code)
+    summary["extractor"] = "regex"
     return _normalise(summary, framework)
 
 

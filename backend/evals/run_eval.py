@@ -94,6 +94,10 @@ def _print_summary(results) -> None:
 def run_pipeline_pass(args) -> None:
     from langsmith import Client
 
+    # Read at call time by pre_parser / ir_builder, so setting them here is enough.
+    os.environ["AST_PARSER"] = args.parser
+    os.environ["IR_MODE"] = args.ir_mode
+
     client = Client()
     examples = list(client.list_examples(
         dataset_name=args.dataset,
@@ -104,7 +108,8 @@ def run_pipeline_pass(args) -> None:
         examples = examples[: args.limit]
 
     print(f"Running pipeline on {len(examples)} example(s) from '{args.dataset}'"
-          + (f" (split={args.split})" if args.split else ""))
+          + (f" (split={args.split})" if args.split else "")
+          + f" [parser={args.parser}, ir_mode={args.ir_mode}]")
 
     results = client.evaluate(
         pipeline_target,
@@ -117,6 +122,8 @@ def run_pipeline_pass(args) -> None:
             "git_commit": _git_commit(),
             "translator_model": os.getenv("MODEL_NAME"),
             "ir_model": os.getenv("HF_MODEL_NAME"),
+            "ast_parser": args.parser,
+            "ir_mode": args.ir_mode,
             "split": args.split or "all",
         },
     )
@@ -147,6 +154,10 @@ def main() -> int:
     p.add_argument("--dataset", default=DEFAULT_DATASET_NAME)
     p.add_argument("--split", choices=["easy", "medium", "hard"], help="Only run one difficulty split")
     p.add_argument("--limit", type=int, help="Cap the number of examples (for quick checks)")
+    p.add_argument("--parser", choices=["tree-sitter", "regex"], default="tree-sitter",
+                   help="Pre-parser used for AST extraction")
+    p.add_argument("--ir-mode", choices=["facts", "hybrid", "llm"], default="hybrid",
+                   help="facts: no LLM; hybrid: LLM only fills gaps; llm: legacy full LLM IR")
     p.add_argument("--prefix", default="baseline", help="Experiment name prefix")
     p.add_argument("--description", default=None)
     p.set_defaults(func=run_pipeline_pass)

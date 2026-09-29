@@ -117,17 +117,20 @@ Include exactly one verdict per behavior, numbered as given."""
 def _judge_chat(messages: list[dict]) -> str:
     import requests
 
+    from app.ollama_client.retry import post_with_retry
+
     base = os.environ["OLLAMA_BASE_URL"].rstrip("/")
-    response = requests.post(
+    response = post_with_retry(
+        requests,
         f"{base}/api/chat",
-        json={
+        {
             "model": judge_model(),
             "messages": messages,
             "stream": False,
             "format": "json",
             "options": {"temperature": 0, "num_ctx": 8192},
         },
-        timeout=int(os.getenv("JUDGE_TIMEOUT_SECS", "300")),
+        int(os.getenv("JUDGE_TIMEOUT_SECS", "300")),
     )
     response.raise_for_status()
     return response.json()["message"]["content"]

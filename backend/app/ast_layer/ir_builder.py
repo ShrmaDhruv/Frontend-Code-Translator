@@ -1,5 +1,7 @@
 
 import json
+import logging
+import os
 import re
 from app.ast_layer.ir_schema import (
     IR,
@@ -12,18 +14,18 @@ from app.ast_layer.ir_schema import (
 )
 from app.ast_layer.ir_validator import validate
 
+log = logging.getLogger(__name__)
+
 MAX_TOKENS = 3000
 TEMPERATURE = 0.1
 
-_SYSTEM_PROMPT = """You are a frontend code analyser.
-You will receive a pre-parsed structural summary of a frontend component
-alongside its raw script block.
+# facts  : IR built only from tree-sitter facts (no LLM call)
+# hybrid : facts first; LLM only fills gaps when the facts look unreliable (default)
+# llm    : legacy - LLM rewrites the whole IR from the summary, facts as fallback
+IR_MODES = ("facts", "hybrid", "llm")
+DEFAULT_IR_MODE = "hybrid"
 
-Your job is to fill in the following IR schema as a JSON object.
-Use the summary hints as a starting point and correct or extend them
-using the raw script block.
-
-IR schema:
+_IR_SCHEMA = """IR schema:
 {
   "framework":  string,               // source framework as detected
   "component":  string,               // component name
@@ -34,7 +36,17 @@ IR schema:
   "methods":    [{ "name": string, "params": [string], "body": string }],
   "imports":    [{ "source": string, "specifiers": [string], "default": string|null }],
   "styles":     string
-}
+}"""
+
+_SYSTEM_PROMPT = """You are a frontend code analyser.
+You will receive a pre-parsed structural summary of a frontend component
+alongside its raw script block.
+
+Your job is to fill in the following IR schema as a JSON object.
+Use the summary hints as a starting point and correct or extend them
+using the raw script block.
+
+""" + _IR_SCHEMA + """
 
 Lifecycle hook names to use:
   onMount | onDestroy | onBeforeMount | onBeforeDestroy | onUpdate |
@@ -208,7 +220,7 @@ def _prop_from_hint(prop) -> IRProp:
             name=str(prop.get("name", "")).strip(),
             type=str(prop.get("type", "any")),
             required=bool(prop.get("required", True)),
-            default=prop.get("default"),
+            default=None if prop.get("default") is None else str(prop.get("default")),
         )
 
     name = str(prop).strip()
@@ -218,6 +230,7 @@ def _prop_from_hint(prop) -> IRProp:
 def _state_from_hint(state) -> IRState:
     if isinstance(state, dict):
         init = state.get("init")
+        init = None if init is None else str(init)
         return IRState(
             name=str(state.get("name", "")).strip(),
             init=init,
@@ -231,8 +244,8 @@ def _computed_from_hint(computed) -> IRComputed:
     if isinstance(computed, dict):
         return IRComputed(
             name=str(computed.get("name", "")).strip(),
-            expression=str(computed.get("expression", "")),
-            deps=list(computed.get("deps", [])),
+            expression=str(computed.get("expression") or computed.get("value") or ""),
+            deps=[str(d) for d in computed.get("deps") or []],
         )
 
     return IRComputed(name=str(computed).strip(), expression="")
@@ -245,10 +258,10 @@ def _lifecycle_from_hint(lifecycle) -> IRLifecycle:
     }
 
     if isinstance(lifecycle, dict):
-        hook = str(lifecycle.get("hook", "onMount")).strip()
+        hook = str(lifecycle.get("hook") or lifecycle.get("name") or "onMount").strip()
         return IRLifecycle(
             hook=hook_map.get(hook, hook),
-            body=str(lifecycle.get("body", "")),
+            body=str(lifecycle.get("body") or lifecycle.get("value") or ""),
         )
 
     hook = str(lifecycle).strip() or "onMount"
@@ -259,8 +272,8 @@ def _method_from_hint(method) -> IRMethod:
     if isinstance(method, dict):
         return IRMethod(
             name=str(method.get("name", "")).strip(),
-            params=list(method.get("params", [])),
-            body=str(method.get("body", "")),
+            params=[str(p) for p in method.get("params") or []],
+            body=str(method.get("body") or method.get("value") or ""),
         )
 
     return IRMethod(name=str(method).strip())
@@ -277,14 +290,13 @@ def _import_from_hint(import_hint) -> IRImport:
     return IRImport(source=str(import_hint))
 
 
-def _fallback_ir_from_summary(summary: dict) -> IR:
+def build_facts_ir(summary: dict) -> IR:
     """
-    Build a conservative IR directly from pre-parser hints.
+    Build the IR deterministically from pre-parser facts.
 
-    This keeps the pipeline alive when the local model returns malformed
-    or truncated JSON. It will be less complete than model-filled IR, but
-    it preserves the key framework, component, state, props, methods,
-    imports, lifecycle, computed values, and styles.
+    With the tree-sitter extractors the facts carry method params/bodies,
+    lifecycle bodies and computed expressions, so this is a complete IR.
+    With the legacy regex extractors it is a conservative, name-only IR.
     """
     return IR(
         framework=summary.get("framework", "HTML"),
@@ -328,70 +340,198 @@ def _get_client():
     return OLClient()
 
 
+_fallback_ir_from_summary = build_facts_ir
+
+
+# ── Hybrid mode: LLM fills gaps in the facts IR ───────────────────────────────
+
+_REVIEW_SYSTEM_PROMPT = """You are a frontend code analyser.
+You receive a component's source script and an IR (JSON) that a syntax
+parser already extracted from it. Everything in the parser IR is correct.
+
+Your job: return the COMPLETE IR as one JSON object with the same schema,
+keeping every existing entry unchanged, and ADDING only entries that exist
+in the source but are missing from the parser IR.
+
+Never remove, rename, or rewrite existing entries. Never invent entries
+that are not in the source.
+
+""" + _IR_SCHEMA + """
+
+Use only these lifecycle hook names:
+  onMount | onDestroy | onBeforeMount | onBeforeDestroy | onUpdate |
+  onBeforeUpdate | onCreate | onAfterViewInit | onChanges | onEveryRender
+
+Return ONLY one complete valid JSON object.
+No markdown fences. No explanation. No preamble. No trailing commas."""
+
+_IR_FIELDS = ("props", "state", "computed", "methods")
+
+
+def review_reasons(summary: dict, ir: IR) -> list[str]:
+    """Why the facts IR should not be trusted on its own (empty list = trust it)."""
+    reasons = []
+    if summary.get("extractor") != "tree-sitter":
+        reasons.append("regex extractor fallback")
+    if summary.get("parse_errors"):
+        reasons.append("source has syntax errors")
+    if not validate(ir).is_valid:
+        reasons.append("facts IR failed validation")
+    has_logic = bool(summary.get("script_block", "").strip())
+    if has_logic and not (ir.state or ir.props or ir.methods or ir.computed or ir.lifecycle):
+        reasons.append("script present but no component members found")
+    return reasons
+
+
+def _build_review_prompt(summary: dict, facts_ir: IR) -> list[dict]:
+    user_content = (
+        f"Framework: {summary['framework']}\n\n"
+        f"Parser IR:\n{facts_ir.to_json(indent=2)}\n\n"
+        f"Source script:\n```\n{summary.get('script_block', '')}\n```\n\n"
+        "Return the complete IR JSON."
+    )
+    return [
+        {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
+        {"role": "user",   "content": user_content},
+    ]
+
+
+def merge_ir(facts: IR, extra: IR) -> IR:
+    """Facts win: keep every facts entry, add LLM entries whose names are new."""
+    merged = IR.from_dict(facts.to_dict())
+    for name in _IR_FIELDS:
+        existing = {item.name for item in getattr(merged, name)}
+        getattr(merged, name).extend(
+            item for item in getattr(extra, name) if item.name and item.name not in existing
+        )
+    hooks = {item.hook for item in merged.lifecycle}
+    merged.lifecycle.extend(
+        item for item in extra.lifecycle if item.hook not in hooks and _has_logic(item.body)
+    )
+    if merged.component in ("", "App") and extra.component:
+        merged.component = extra.component
+    return merged
+
+
+def _chat_json(client, messages: list[dict], retry_messages) -> dict | None:
+    """One LLM call plus one JSON-repair retry; None if both are unparseable."""
+    raw = client.chat(messages, max_new_tokens=MAX_TOKENS, temperature=TEMPERATURE)
+    try:
+        return _parse_json(raw)
+    except ValueError as exc:
+        raw = client.chat(retry_messages(raw, str(exc)), max_new_tokens=MAX_TOKENS, temperature=TEMPERATURE)
+        try:
+            return _parse_json(raw)
+        except ValueError:
+            return None
+
+
+def _ir_from_data(data: dict | None) -> IR | None:
+    """Lenient: small models drift from the schema (e.g. lifecycle {name, value})."""
+    if not isinstance(data, dict):
+        return None
+    try:
+        return build_facts_ir({
+            "framework":       data.get("framework") or "HTML",
+            "component":       data.get("component") or "App",
+            "props":           data.get("props") or [],
+            "state_hints":     data.get("state") or [],
+            "computed_hints":  data.get("computed") or [],
+            "lifecycle_hints": data.get("lifecycle") or [],
+            "method_hints":    data.get("methods") or [],
+            "imports":         data.get("imports") or [],
+            "styles":          data.get("styles") if isinstance(data.get("styles"), str) else "",
+        })
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _has_logic(body: str) -> bool:
+    """False for empty bodies like '', '{}', '() => {}'."""
+    return bool(body.replace("=>", "").strip(" \n\t(){};"))
+
+
+def _hybrid_ir(summary: dict, facts_ir: IR) -> IR:
+    reasons = review_reasons(summary, facts_ir)
+    if not reasons:
+        return facts_ir
+
+    client = _get_client()
+    if not client.is_available():
+        log.warning("IR review skipped (Ollama unreachable): %s", reasons)
+        return facts_ir
+
+    messages = _build_review_prompt(summary, facts_ir)
+
+    def retry(raw: str, error: str) -> list[dict]:
+        return messages + [
+            {"role": "assistant", "content": raw[:1200]},
+            {"role": "user", "content": (
+                f"That was not valid JSON ({error}). "
+                "Return the complete IR as one valid JSON object only."
+            )},
+        ]
+
+    extra = _ir_from_data(_chat_json(client, messages, retry))
+    if extra is None:
+        return facts_ir
+    merged = merge_ir(facts_ir, extra)
+    return merged if validate(merged).is_valid else facts_ir
+
+
+# ── Legacy llm mode ───────────────────────────────────────────────────────────
+
+def _legacy_llm_ir(summary: dict, facts_ir: IR) -> IR:
+    client = _get_client()
+    if not client.is_available():
+        return facts_ir
+
+    def json_retry(raw: str, error: str) -> list[dict]:
+        return _build_json_retry_prompt(summary, raw, error)
+
+    ir = _ir_from_data(_chat_json(client, _build_prompt(summary), json_retry))
+    if ir is None:
+        return facts_ir
+    result = validate(ir)
+    if result.is_valid:
+        return ir
+
+    ir = _ir_from_data(_chat_json(client, _build_retry_prompt(summary, result.errors), json_retry))
+    return ir if ir is not None and validate(ir).is_valid else facts_ir
+
+
+# ── Entry ─────────────────────────────────────────────────────────────────────
+
+def ir_mode() -> str:
+    mode = os.getenv("IR_MODE", DEFAULT_IR_MODE)
+    if mode not in IR_MODES:
+        raise ValueError(f"IR_MODE must be one of {IR_MODES}, got '{mode}'")
+    return mode
+
+
 def build_ir(summary: dict) -> IR:
     """
     Convert a pre-parsed summary dict into a validated IR instance.
 
-    Args:
-        summary : Output of pre_parser.parse()
-
-    Returns:
-        IR instance — validated, ready for translation prompt
+    The facts IR (built without any LLM) is always computed first and is
+    the fallback for every LLM failure, so bad model output never crashes
+    the pipeline. IR_MODE picks how much the LLM is involved (see IR_MODES).
 
     Raises:
-        RuntimeError  if Ollama is unreachable
-        ValueError    if IR cannot be parsed after two attempts
+        ValueError  if the chosen IR is the facts IR and it is invalid
     """
-    client = _get_client()
+    facts_ir = build_facts_ir(summary)
+    mode = ir_mode()
 
-    if not client.is_available():
-        ir = _fallback_ir_from_summary(summary)
-        result = validate(ir)
-        if result.is_valid:
-            return ir
-        raise ValueError(
-            "Ollama is not reachable and fallback IR was invalid.\n"
-            f"Errors: {result.errors}"
-        )
+    if mode == "facts":
+        ir = facts_ir
+    elif mode == "hybrid":
+        ir = _hybrid_ir(summary, facts_ir)
+    else:
+        ir = _legacy_llm_ir(summary, facts_ir)
 
-    messages  = _build_prompt(summary)
-    raw       = client.chat(messages, max_new_tokens=MAX_TOKENS, temperature=TEMPERATURE)
-
-    try:
-        data = _parse_json(raw)
-    except ValueError as exc:
-        messages = _build_json_retry_prompt(summary, raw, str(exc))
-        raw      = client.chat(messages, max_new_tokens=MAX_TOKENS, temperature=TEMPERATURE)
-        try:
-            data = _parse_json(raw)
-        except ValueError:
-            ir = _fallback_ir_from_summary(summary)
-            result = validate(ir)
-            if not result.is_valid:
-                raise ValueError(
-                    "IR model returned malformed JSON and fallback IR was invalid.\n"
-                    f"Errors: {result.errors}"
-                )
-            return ir
-
-    ir        = IR.from_dict(data)
-    result    = validate(ir)
-
-    if not result.is_valid:
-        messages  = _build_retry_prompt(summary, result.errors)
-        raw       = client.chat(messages, max_new_tokens=MAX_TOKENS, temperature=TEMPERATURE)
-        data      = _parse_json(raw)
-        ir        = IR.from_dict(data)
-        result    = validate(ir)
-
+    if ir is facts_ir:
+        result = validate(facts_ir)
         if not result.is_valid:
-            fallback = _fallback_ir_from_summary(summary)
-            fallback_result = validate(fallback)
-            if fallback_result.is_valid:
-                return fallback
-            raise ValueError(
-                f"IR extraction failed after two attempts.\n"
-                f"Errors: {result.errors}"
-            )
-
+            raise ValueError(f"IR extraction failed.\nErrors: {result.errors}")
     return ir

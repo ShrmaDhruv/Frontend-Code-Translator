@@ -41,6 +41,17 @@ Rules that always apply:
   - Use the IR to recover structure only when the source code is ambiguous
   - Never add empty placeholder lifecycle hooks, empty placeholder methods, or
     placeholder imports
+  - Resource cleanup (the one exception to "do not add features"): when the
+    target is React, Vue, or Angular and the source starts an interval,
+    timeout, event listener, or subscription that it never cleans up, store
+    its handle and release it in the target's teardown (React useEffect
+    cleanup return, Vue onUnmounted, Angular ngOnDestroy). Components can be
+    removed while the app keeps running, so an uncleared timer would leak
+  - When the source is plain HTML/JavaScript and the target is React, Vue, or
+    Angular, convert DOM reads/writes (document.getElementById, textContent,
+    innerHTML, classList, hidden, input.value) into component state and
+    declarative template rendering; never use document.* DOM APIs in
+    React, Vue, or Angular output
   - When translating React useState setters, convert setName(...) calls into
     the target framework's state update syntax; never copy React setter calls
     into Vue, Angular, or HTML output
@@ -973,6 +984,15 @@ Strict Rules (VERY IMPORTANT)
     <!-- empty -->
     empty init()
 
+Naming Rule:
+  - The snippets below are PATTERNS ONLY. Names like someElement,
+    someState, someValue, handler are placeholders.
+  - NEVER copy a placeholder name, variable, function, id, or constant
+    into the output. Every variable, function, id, and class in the
+    output must come from the source component.
+  - NEVER add state, constants, functions, forms, or listeners that
+    do not exist in the source component.
+
 Initialization Rules:
   - Put ALL DOM querying and listener setup inside:
 
@@ -984,88 +1004,69 @@ Initialization Rules:
 
   - init() must:
       - query elements
-      - attach listeners
+      - attach listeners exactly once
       - render initial UI if needed
 
   - Store queried elements in constants:
 
-    const form = document.getElementById('form');
+    const someElement = document.getElementById('some-id');
 
   - Guard element usage:
 
-    if (form) {
-      form.addEventListener(...);
+    if (someElement) {
+      someElement.addEventListener('click', handler);
     }
+
+  - Attach listeners ONLY in init(), NEVER inside render()
+    (render() runs repeatedly and would attach duplicate listeners)
 
   - NEVER leave init() empty
 
   - Remove init() entirely if no JavaScript behavior exists
 
 State:
-  - Mutable state:
-      let count = 0;
+  - Each source state value becomes one top-level let variable
+    with the same name and initial value as the source
 
-  - Constants:
-      const API_URL = "...";
+  - Each source prop becomes a top-level const with its default value
 
 Computed:
-  - Use standard functions:
-
-    function getTotal() {
-      return price * qty;
-    }
+  - Each source computed/derived value becomes a plain function
+    with the same name that returns the derived value
 
 Methods:
-  - Standard functions:
-
-    function increment() {
-      count++;
-      render();
-    }
-
-  - Async allowed:
-
-    async function fetchData() {}
+  - Each source method becomes a plain function with the same name
+    that updates state and then calls render()
 
   - Avoid dead code
 
   - Avoid empty functions
 
 Lifecycle:
-  - onMount:
+  - Only translate lifecycle hooks that exist in the source
 
-      document.addEventListener('DOMContentLoaded', () => {
-        init();
-      });
+  - onMount: run the source's mount logic from init()
 
-  - onDestroy:
-
-      window.addEventListener('beforeunload', () => {
-        ...
-      });
+  - onDestroy: only if the source has cleanup logic
+    (e.g. clearing an interval), run it in a
+    window 'beforeunload' listener
 
   - onUpdate:
       call render() manually after state changes
 
 Events:
-  - Use addEventListener ONLY
+  - Use addEventListener ONLY, attached once in init()
 
-      button.addEventListener('click', handler);
+  - Clicks: 'click' listener on the element
 
-  - Form submit:
+  - Text inputs bound to state: 'input' listener that copies
+    the element's value into the state variable, so the state
+    always matches what the user typed
 
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        handler();
-      });
+  - Form submit: 'submit' listener that calls e.preventDefault()
+    before the handler
 
-  - Input:
-
-      input.addEventListener('input', handler);
-
-  - Change:
-
-      select.addEventListener('change', handler);
+  - Selects/checkboxes: 'change' listener
 
 DOM Updates:
   - Update UI manually after state changes
@@ -1074,13 +1075,8 @@ DOM Updates:
       element.textContent
       element.innerHTML (sparingly)
 
-  - Prefer centralized render()
-
-  Example:
-
-      function render() {
-        counter.textContent = count;
-      }
+  - Prefer a single centralized render() that updates every
+    element whose content depends on state
 
   - Every state-changing method MUST:
       - update DOM directly
