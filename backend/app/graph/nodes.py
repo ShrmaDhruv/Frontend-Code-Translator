@@ -14,6 +14,7 @@ from app.pipeline import (
     AUTO_DETECT,
     LOW_CONFIDENCE_WARNING,
     SAME_FRAMEWORK_WARNING,
+    PipelineDetection,
     PipelineResult,
     llm_detection,
     manual_detection,
@@ -26,6 +27,8 @@ from app.translation import (
     request_translation,
     translation_messages,
 )
+from app.security import inspect_input
+from app.security.prompt_guard import leaked_canary
 from app.translation.response_cleaner import clean
 from app.translation.validator import validate_translation
 
@@ -33,15 +36,18 @@ from app.translation.validator import validate_translation
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 def check_input(state: PipelineState) -> dict:
-    """Normalise framework names. Phase 3 adds size caps and injection checks here."""
+    """Normalise framework names and run the input guard (size, code-likeness, injection)."""
     target = normalize_framework(state["target"])
     if target == AUTO_DETECT:
         raise ValueError("target must be a concrete framework, not Auto Detect")
+    verdict = inspect_input(state["code"])
     return {
         "target":         target,
         "source_request": normalize_framework(state["source_request"]),
         "attempts":       0,
         "errors":         [],
+        "blocked":        verdict.blocked,
+        "input_warnings": [*state.get("input_warnings", []), *verdict.warnings],
     }
 
 
@@ -108,8 +114,23 @@ def validate_output(state: PipelineState) -> dict:
 
 # ── Result ────────────────────────────────────────────────────────────────────
 
+INPUT_BLOCKED_DETECTION = PipelineDetection(framework="", confidence="none", source="input_guard")
+
+PROMPT_LEAK_ERROR = "the model output contained internal prompt text, so it was withheld"
+
+
 def finalize(state: PipelineState) -> dict:
-    """Same PipelineResult, in the same precedence order, as the legacy pipeline."""
+    """Builds the PipelineResult: input guard block first, then the legacy pipeline's precedence."""
+    input_warnings = state.get("input_warnings", [])
+
+    if state.get("blocked"):
+        result = PipelineResult(
+            ok=False, source=state["source_request"], target=state["target"], stage="input",
+            detection=INPUT_BLOCKED_DETECTION, warnings=list(input_warnings),
+            errors=[state["blocked"]],
+        )
+        return {"result": result}
+
     detection  = state["detection"]
     target     = state["target"]
     stop_after = state["stop_after"]
@@ -141,6 +162,11 @@ def finalize(state: PipelineState) -> dict:
             ok=True, source=ir.framework, stage="translate", ir=ir,
             warnings=[NO_TRANSLATION_WARNING], **base,
         )
+    elif leaked_canary(state["translated_code"]):
+        result = PipelineResult(
+            ok=False, source=state["ir"].framework, stage="translate", ir=state["ir"],
+            errors=[PROMPT_LEAK_ERROR], **base,
+        )
     else:
         ir, validation = state["ir"], state["validation"]
         result = PipelineResult(
@@ -150,4 +176,5 @@ def finalize(state: PipelineState) -> dict:
             errors=validation.errors if not validation.is_valid else [],
             **base,
         )
+    result.warnings = [*input_warnings, *result.warnings]
     return {"result": result}

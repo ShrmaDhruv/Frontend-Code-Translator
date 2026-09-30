@@ -16,6 +16,10 @@ class PipelineState(TypedDict, total=False):
     use_llm_detection: bool
     stop_after:        str   # "detect" | "ir" | "translate"
 
+    # Input guard
+    input_warnings: list[str]
+    blocked:        str | None   # reason the input was rejected
+
     # Detection
     layer1:    DetectionResult | None
     detection: PipelineDetection

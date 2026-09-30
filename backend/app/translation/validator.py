@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass, field
 from app.ir.schema import IR
+from app.security.prompt_guard import leaked_canary
 from app.translation import empty_functions
 from app.translation.imports import find_missing
 from app.translation.template_refs import undefined_template_refs
@@ -540,6 +541,10 @@ def validate_translation(
 
     if len(code.strip()) < 20:
         errors.append("translated output is too short to be valid code")
+        return TranslationValidationResult(is_valid=False, errors=errors)
+
+    if leaked_canary(code):
+        errors.append("output contains system prompt text; return only the translated component code")
         return TranslationValidationResult(is_valid=False, errors=errors)
 
     for label, pattern in _COMMENT_PATTERNS:

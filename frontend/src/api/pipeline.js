@@ -20,8 +20,21 @@ export async function runPipeline({
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.detail || `Backend returned ${response.status}`);
+    throw new Error(errorMessage(data.detail) || `Backend returned ${response.status}`);
   }
 
   return data;
+}
+
+// FastAPI validation errors (422) return `detail` as a list of { loc, msg } objects.
+function errorMessage(detail) {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : "";
+        return field ? `${field}: ${item.msg}` : item.msg;
+      })
+      .join("; ");
+  }
+  return typeof detail === "string" ? detail : "";
 }

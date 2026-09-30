@@ -1,7 +1,7 @@
 """
 Builds the translation pipeline as a LangGraph StateGraph.
 
-    check_input → detect_rules → [detect_llm] → [ask_user] → pre_parse
+    [sanitize_input] → check_input (input guard; blocked → finalize) → detect_rules → [detect_llm] → [ask_user] → pre_parse
     → build_facts_ir → [review_ir] → validate_ir
     → translate → clean_output → validate_output (↺ translate, up to 3 attempts)
     → finalize
@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from app.graph import nodes, routing
 from app.graph.state import PipelineState
 from app.pipeline import PipelineResult
+from app.security import sanitize_input
 
 # Longest path is 17 steps (LLM detection + IR review + 3 translation attempts).
 RECURSION_LIMIT = 40
@@ -37,7 +38,7 @@ def get_graph():
     detection_targets = ["finalize", "ask_user", "pre_parse"]
 
     graph.add_edge(START, "check_input")
-    graph.add_edge("check_input", "detect_rules")
+    graph.add_conditional_edges("check_input", routing.after_input, ["detect_rules", "finalize"])
     graph.add_conditional_edges("detect_rules", routing.after_rules, ["detect_llm", *detection_targets])
     graph.add_conditional_edges("detect_llm", routing.after_detection, detection_targets)
     graph.add_edge("ask_user", "finalize")
@@ -62,9 +63,12 @@ def run_graph(
     use_llm_detection: bool,
     stop_after: str,
 ) -> PipelineResult:
+    # Sanitise before invoking so tracing never records hidden characters or secrets.
+    code, input_warnings = sanitize_input(code)
     state = get_graph().invoke(
         {
             "code":              code,
+            "input_warnings":    input_warnings,
             "target":            target,
             "source_request":    source,
             "use_llm_detection": use_llm_detection,

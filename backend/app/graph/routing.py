@@ -8,6 +8,10 @@ from app.graph.state import PipelineState
 from app.translation import MAX_TRANSLATION_ATTEMPTS
 
 
+def after_input(state: PipelineState) -> str:
+    return "finalize" if state.get("blocked") else "detect_rules"
+
+
 def after_rules(state: PipelineState) -> str:
     layer1 = state.get("layer1")
     if layer1 is not None and layer1.is_ambiguous and state["use_llm_detection"]:

@@ -146,8 +146,15 @@ def detect_source(
     Manual source selection skips detection and returns high confidence.
     Auto-detect first uses Layer 1 rules. If Layer 1 is ambiguous and
     use_llm_detection=True, Layer 3 Qwen detection is called and its answer wins.
+    Input rejected by the input guard raises ValueError.
     """
+    from app.security import inspect_input, sanitize_input
+
     source = normalize_framework(source)
+    code, _ = sanitize_input(code)
+    verdict = inspect_input(code)
+    if verdict.blocked:
+        raise ValueError(verdict.blocked)
 
     if source != AUTO_DETECT:
         return manual_detection(source)

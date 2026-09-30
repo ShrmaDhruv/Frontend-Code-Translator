@@ -57,6 +57,7 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 │   │   │   ├── builder.py          # Summary → IR (facts | hybrid | llm modes)
 │   │   │   ├── schema.py           # Framework-neutral IR dataclasses
 │   │   │   └── validator.py        # IR validation
+│   │   ├── security/           # Guardrails: API limits, input guard, prompt hardening
 │   │   ├── ollama_client/      # Shared Ollama client (detection + translation models), retry, warmup
 │   │   └── translation/        # Translation prompts, cleaner, and output validator
 │   ├── evals/                  # LangSmith golden dataset, evaluators, judge calibration
@@ -143,6 +144,23 @@ Environment variables (in the root `.env`):
 | `CORS_ORIGINS` | Comma-separated origins allowed to call the API from another origin (default: the Parcel dev server, `http://localhost:1234`) |
 | `OLLAMA_WARMUP` | `0` disables model warm-up at startup |
 | `FRONTEND_DIST` | Override the built-frontend directory |
+| `ENABLE_API_DOCS` | `1` serves `/docs`, `/redoc`, `/openapi.json` (off by default) |
+| `RATE_LIMIT_PER_MINUTE` | POST requests per client IP per minute (default `10`, `0` disables) |
+| `MAX_CONCURRENT_PIPELINES` | Pipelines running at once; others queue (default `2`) |
+| `QUEUE_TIMEOUT_SECS` | How long a queued request waits before a 503 (default `60`) |
+| `MAX_BODY_BYTES` | Request body limit (default `262144`) |
+| `MAX_CODE_CHARS` / `MAX_CODE_LINES` | Input size limits (default `20000` / `1000`) |
+| `INJECTION_POLICY` | `block` (default) rejects input with high-risk prompt-injection text; `warn` only warns |
+
+## Security
+
+Guardrails live in `backend/app/security/`:
+
+- **API limits** (`api_limits.py`): body size limit, per-IP rate limit, concurrent pipeline cap, security headers (CSP, `X-Frame-Options`, `nosniff`), API docs off by default, internal errors (e.g. the Ollama host) never returned to clients.
+- **Input guard** (`input_guard.py`): before the graph runs, strips invisible/bidi/tag Unicode characters and chat-template tokens (`<|im_start|>`, `[INST]`, ...) and masks secrets (cloud keys, API tokens, JWTs, private keys). The `check_input` node then enforces size limits, rejects input that isn't code, and scores prompt-injection text (high-risk → blocked with `stage: "input"`, low-risk → warning).
+- **Prompt hardening** (`prompt_guard.py`): user code and anything derived from it (IR, summaries) goes into tags with a random per-prompt id; every system prompt says tagged content is data, not instructions; the translation prompt repeats the rules after the input and forbids adding network calls, scripts, or URLs; a canary in the system prompt withholds any output that leaks it.
+
+Rate limit and concurrency state are per process; behind a reverse proxy run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply per real client.
 
 ### Frontend Dev Server
 
