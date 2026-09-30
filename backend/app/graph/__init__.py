@@ -1,8 +1,8 @@
 """
 graph
 
-LangGraph version of the translation pipeline. Selected with
-PIPELINE_ENGINE=graph; app.pipeline.run_pipeline dispatches here.
+LangGraph translation pipeline; app.pipeline.run_pipeline delegates here.
+Diagram: docs/pipeline-graph.png
 
 Usage:
     from app.graph import run_graph

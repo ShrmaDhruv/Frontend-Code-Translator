@@ -97,7 +97,6 @@ def run_pipeline_pass(args) -> None:
     # Read at call time by pre_parser / ir.builder, so setting them here is enough.
     os.environ["AST_PARSER"] = args.parser
     os.environ["IR_MODE"] = args.ir_mode
-    os.environ["PIPELINE_ENGINE"] = args.engine
 
     client = Client()
     examples = list(client.list_examples(
@@ -110,7 +109,7 @@ def run_pipeline_pass(args) -> None:
 
     print(f"Running pipeline on {len(examples)} example(s) from '{args.dataset}'"
           + (f" (split={args.split})" if args.split else "")
-          + f" [engine={args.engine}, parser={args.parser}, ir_mode={args.ir_mode}]")
+          + f" [parser={args.parser}, ir_mode={args.ir_mode}]")
 
     results = client.evaluate(
         pipeline_target,
@@ -125,7 +124,7 @@ def run_pipeline_pass(args) -> None:
             "ir_model": os.getenv("HF_MODEL_NAME"),
             "ast_parser": args.parser,
             "ir_mode": args.ir_mode,
-            "pipeline_engine": args.engine,
+            "pipeline_engine": "graph",
             "split": args.split or "all",
         },
     )
@@ -160,8 +159,6 @@ def main() -> int:
                    help="Pre-parser used for AST extraction")
     p.add_argument("--ir-mode", choices=["facts", "hybrid", "llm"], default="hybrid",
                    help="facts: no LLM; hybrid: LLM only fills gaps; llm: legacy full LLM IR")
-    p.add_argument("--engine", choices=["legacy", "graph"], default="legacy",
-                   help="Pipeline orchestration: hand-rolled (legacy) or LangGraph (graph)")
     p.add_argument("--prefix", default="baseline", help="Experiment name prefix")
     p.add_argument("--description", default=None)
     p.set_defaults(func=run_pipeline_pass)

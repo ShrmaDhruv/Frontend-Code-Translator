@@ -491,7 +491,7 @@ def test_prompt_builder():
 # ── Live: full pipeline ───────────────────────────────────────────────────────
 
 def test_live():
-    from app.translation import translate
+    from app.pipeline import run_pipeline
 
     cases = [
         (
@@ -537,8 +537,8 @@ def test_live():
     passed = 0
     for label, code, source, target, expected_markers in cases:
         try:
-            result = translate(code, source=source, target=target)
-            markers_found = all(m in result.code for m in expected_markers)
+            result = run_pipeline(code, target=target, source=source)
+            markers_found = all(m in result.translated_code for m in expected_markers)
             ok = result.ok and markers_found
 
             if ok:
@@ -548,7 +548,7 @@ def test_live():
             if not result.ok:
                 print(f"    errors:   {result.errors}")
             if not markers_found:
-                missing = [m for m in expected_markers if m not in result.code]
+                missing = [m for m in expected_markers if m not in result.translated_code]
                 print(f"    missing markers: {missing}")
             if result.warnings:
                 print(f"    warnings: {result.warnings}")

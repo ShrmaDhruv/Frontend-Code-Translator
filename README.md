@@ -44,7 +44,8 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 │   ├── requirements.txt        # Python dependencies
 │   ├── app/
 │   │   ├── main.py             # FastAPI backend server (app = FastAPI())
-│   │   ├── pipeline.py         # Main detection → IR → translation orchestrator
+│   │   ├── pipeline.py         # Public entry (run_pipeline, detect_source) + CLI
+│   │   ├── graph/              # LangGraph StateGraph: state, nodes, routing, builder
 │   │   ├── detection/
 │   │   │   ├── rule_detector.py    # Layer 1 rule-based framework detection engine
 │   │   │   ├── rules/              # Weighted regex rules per framework
@@ -71,12 +72,14 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 
 ## How the Pipeline Works
 
+The pipeline is a LangGraph `StateGraph` (`backend/app/graph/`); each step below is a node, and the branches (LLM detection, IR review, translation retries) are conditional edges. Diagram: [`docs/pipeline-graph.png`](docs/pipeline-graph.png).
+
 1. **Input**: The user pastes frontend code and chooses a target framework.
 2. **Detection**: The backend identifies the source framework using weighted rules. If the result is ambiguous, an Ollama-backed LLM detector can be used.
 3. **IR Extraction**: Framework-specific extractors collect structural hints such as props, state, lifecycle hooks, imports, methods, template bindings, and styles.
 4. **IR Building**: The hints are converted into a framework-neutral intermediate representation.
 5. **Translation**: The IR and original source code are sent to the local LLM to generate target-framework code.
-6. **Cleaning and Validation**: The generated code is cleaned, checked for framework-specific correctness, and retried if validation fails.
+6. **Cleaning and Validation**: The generated code is cleaned, checked for framework-specific correctness, and retried (up to 3 attempts, with the validator errors fed back) if validation fails.
 7. **Output**: The translated code, confidence, warnings, and errors are returned to the frontend.
 
 ## API Endpoints

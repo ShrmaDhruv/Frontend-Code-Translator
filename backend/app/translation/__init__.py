@@ -1,59 +1,27 @@
 """
 translation/__init__.py
 
-Public interface for the translation pipeline.
+Building blocks for the translation stage. The graph (app/graph/nodes.py)
+runs them as translate → clean_output → validate_output, retrying up to
+MAX_TRANSLATION_ATTEMPTS times with the validator errors fed back.
 
-Translates frontend code from one framework to another using a
-three-stage pipeline:
-
-  Stage 1 — AST extraction
-      raw code → pre_parser → ir.builder → validated IR
-
-  Stage 2 — Translation
-      IR + target framework → prompt_builder → translation model (Ollama) → raw response
-
-  Stage 3 — Cleaning and validation
-      raw response → response_cleaner → validator
-      if critical errors → one retry with error context
-
-The source framework is provided by the caller (already determined
-by the detection pipeline). Translation never re-detects.
+    IR + target → translation_messages → request_translation (Ollama)
+        → response_cleaner.clean → validator.validate_translation
 
 Usage:
-    from app.translation import translate
+    from app.translation import get_translator, request_translation, translation_messages
 
-    result = translate(code, source="React", target="Vue")
-    print(result.code)
-    print(result.warnings)
-    print(result.ok)
+    raw = request_translation(get_translator(), translation_messages(ir, "Vue", source_code))
 """
 
-from dataclasses import dataclass, field
-
-from app.ir              import extract_ir
-from app.ir.schema    import IR
-from app.translation.prompt_builder      import build_messages
-from app.translation.response_cleaner    import clean
-from app.translation.validator import validate_translation
+from app.ir.schema import IR
+from app.translation.prompt_builder import build_messages
 
 MAX_NEW_TOKENS = 2048
 TEMPERATURE    = 0.1
 MAX_TRANSLATION_ATTEMPTS = 3
 
-SUPPORTED = {"React", "Vue", "Angular", "HTML"}
-
 NO_TRANSLATION_WARNING = "source and target are the same framework - no translation generated"
-
-
-@dataclass
-class TranslationResult:
-    ok:        bool
-    code:      str
-    source:    str
-    target:    str
-    warnings:  list[str] = field(default_factory=list)
-    errors:    list[str] = field(default_factory=list)
-    ir:        IR | None = None
 
 
 def _get_client():
@@ -101,101 +69,7 @@ def request_translation(client, messages: list[dict]) -> str:
     return client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
 
 
-def translate_ir(
-    ir: IR,
-    target: str,
-    source_code: str | None = None,
-) -> TranslationResult:
-    """
-    Translate an already-built IR into the target framework using the translation model.
-
-    Use this when AST/IR extraction has already happened and you want
-    the full generated code output from the translation model directly.
-    """
-    if target not in SUPPORTED:
-        raise ValueError(
-            f"Unsupported target framework: '{target}'. "
-            f"Expected one of: {', '.join(sorted(SUPPORTED))}"
-        )
-
-    if ir.framework == target:
-        return TranslationResult(
-            ok=True,
-            code="",
-            source=ir.framework,
-            target=target,
-            warnings=[NO_TRANSLATION_WARNING],
-            ir=ir,
-        )
-
-    client   = get_translator()
-    errors   = None
-    attempts = 0
-
-    while True:
-        raw        = request_translation(client, translation_messages(ir, target, source_code, errors))
-        translated = clean(raw, target)
-        validation = validate_translation(translated, ir, target)
-        attempts  += 1
-        if validation.is_valid or attempts >= MAX_TRANSLATION_ATTEMPTS:
-            break
-        errors = validation.errors
-
-    return TranslationResult(
-        ok       = validation.is_valid,
-        code     = translated,
-        source   = ir.framework,
-        target   = target,
-        warnings = validation.warnings,
-        errors   = validation.errors if not validation.is_valid else [],
-        ir       = ir,
-    )
-
-
-def translate(
-    code:   str,
-    source: str,
-    target: str,
-) -> TranslationResult:
-    """
-    Translate frontend code from source framework to target framework.
-
-    Args:
-        code   : Raw source code string
-        source : Source framework — one of React | Vue | Angular | HTML
-        target : Target framework — one of React | Vue | Angular | HTML
-
-    Returns:
-        TranslationResult with translated code, warnings, and ok flag
-
-    Raises:
-        ValueError   if source or target framework is not supported
-        RuntimeError if Ollama is unreachable
-    """
-    if source not in SUPPORTED:
-        raise ValueError(
-            f"Unsupported source framework: '{source}'. "
-            f"Expected one of: {', '.join(sorted(SUPPORTED))}"
-        )
-    if target not in SUPPORTED:
-        raise ValueError(
-            f"Unsupported target framework: '{target}'. "
-            f"Expected one of: {', '.join(sorted(SUPPORTED))}"
-        )
-    if source == target:
-        return TranslationResult(
-            ok=True, code=code, source=source, target=target,
-            warnings=["source and target are the same framework — code returned unchanged"],
-        )
-
-    ir = extract_ir(code, source)
-    return translate_ir(ir, target, source_code=code)
-
-
 __all__ = [
-    "translate",
-    "translate_ir",
-    "TranslationResult",
     "get_translator",
     "translation_messages",
     "request_translation",

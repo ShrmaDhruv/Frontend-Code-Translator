@@ -2,25 +2,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from app.ir import extract_ir
 from app.ir.schema import IR
 from app.detection.rule_detector import DetectionResult, detect
-from app.translation import TranslationResult, translate_ir
 
 
 SUPPORTED_FRAMEWORKS = {"React", "Vue", "Angular", "HTML"}
 AUTO_DETECT = "Auto Detect"
 
 StopAfter = Literal["detect", "ir", "translate"]
-
-# "legacy" (hand-rolled flow below) or "graph" (LangGraph, app/graph/)
-PIPELINE_ENGINES = ("legacy", "graph")
-DEFAULT_PIPELINE_ENGINE = "legacy"
 
 LOW_CONFIDENCE_WARNING = "detection confidence is low"
 ASK_USER_ERROR = (
@@ -173,7 +166,7 @@ def run_pipeline(
     stop_after: StopAfter = "translate",
 ) -> PipelineResult:
     """
-    Run the whole project pipeline.
+    Run the whole project pipeline (LangGraph, see app/graph/).
 
     Args:
         code: Raw frontend source code.
@@ -186,90 +179,9 @@ def run_pipeline(
         PipelineResult containing detection metadata, IR, translated code,
         warnings, and errors.
     """
-    engine = pipeline_engine()
-    if engine == "graph":
-        from app.graph import run_graph
-        return run_graph(code, target, source, use_llm_detection, stop_after)
-    return _run_pipeline_legacy(code, target, source, use_llm_detection, stop_after)
+    from app.graph import run_graph  # the graph imports this module
 
-
-def pipeline_engine() -> str:
-    engine = os.getenv("PIPELINE_ENGINE", DEFAULT_PIPELINE_ENGINE)
-    if engine not in PIPELINE_ENGINES:
-        raise ValueError(f"PIPELINE_ENGINE must be one of {PIPELINE_ENGINES}, got '{engine}'")
-    return engine
-
-
-def _run_pipeline_legacy(
-    code: str,
-    target: str,
-    source: str,
-    use_llm_detection: bool,
-    stop_after: StopAfter,
-) -> PipelineResult:
-    target = normalize_framework(target)
-    if target == AUTO_DETECT:
-        raise ValueError("target must be a concrete framework, not Auto Detect")
-
-    detection = detect_source(code, source=source, use_llm_detection=use_llm_detection)
-
-    if stop_after == "detect":
-        return PipelineResult(
-            ok=not detection.ask_user,
-            source=detection.framework,
-            target=target,
-            stage="detect",
-            detection=detection,
-            warnings=[LOW_CONFIDENCE_WARNING] if detection.ask_user else [],
-        )
-
-    if detection.ask_user:
-        return PipelineResult(
-            ok=False,
-            source=detection.framework,
-            target=target,
-            stage="detect",
-            detection=detection,
-            errors=[ASK_USER_ERROR],
-        )
-
-    ir = extract_ir(code, detection.framework)
-
-    if stop_after == "ir":
-        return PipelineResult(
-            ok=True,
-            source=detection.framework,
-            target=target,
-            stage="ir",
-            detection=detection,
-            ir=ir,
-        )
-
-    if detection.framework == target:
-        return PipelineResult(
-            ok=True,
-            source=detection.framework,
-            target=target,
-            stage="translate",
-            detection=detection,
-            ir=ir,
-            translated_code=code,
-            warnings=[SAME_FRAMEWORK_WARNING],
-        )
-
-    translated: TranslationResult = translate_ir(ir, target, source_code=code)
-
-    return PipelineResult(
-        ok=translated.ok,
-        source=translated.source,
-        target=translated.target,
-        stage="translate",
-        detection=detection,
-        ir=translated.ir or ir,
-        translated_code=translated.code,
-        warnings=translated.warnings,
-        errors=translated.errors,
-    )
+    return run_graph(code, target, source, use_llm_detection, stop_after)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

@@ -23,8 +23,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 warnings.filterwarnings("ignore")
 
-from app.ir import extract_ir
-from app.translation import translate_ir
+from app.pipeline import run_pipeline
 
 
 SOURCE_FRAMEWORK = "React"
@@ -82,14 +81,11 @@ def main():
     print(f"  Source: {SOURCE_FRAMEWORK}")
     print(f"  Target: {TARGET_FRAMEWORK}")
 
-    print("\nSTEP 1 - Building IR with AST layer + Qwen")
-    print("-" * 70)
-    ir = extract_ir(SOURCE_CODE, SOURCE_FRAMEWORK)
-    print(ir.to_json(indent=2))
+    result = run_pipeline(SOURCE_CODE, target=TARGET_FRAMEWORK, source=SOURCE_FRAMEWORK)
 
-    print("\nSTEP 2 - Translating IR with the translation model")
+    print("\nIR")
     print("-" * 70)
-    result = translate_ir(ir, TARGET_FRAMEWORK)
+    print(result.ir.to_json(indent=2) if result.ir else None)
 
     print(f"ok: {result.ok}")
     if result.warnings:
@@ -99,7 +95,7 @@ def main():
 
     print("\nFULL TRANSLATED CODE")
     print("=" * 70)
-    print(result.code)
+    print(result.translated_code)
     print("=" * 70 + "\n")
 
 
