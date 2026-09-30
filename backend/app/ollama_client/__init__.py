@@ -1,17 +1,30 @@
 """
 ollama_client
 
-Local Ollama REST client helpers.
+Ollama REST client shared by detection, IR review, and translation.
 
 Usage:
-    from app.ollama_client import OLClient
+    from app.ollama_client import detection_client, translation_client
+
+    text = translation_client().chat(messages, max_new_tokens=2048)
 """
 
-from app.ollama_client.local_ollama import MODEL_NAME, OLLAMA_URL, TIMEOUT_SECS, OLClient
+from app.ollama_client.client import (
+    DETECTION_MODEL,
+    OLLAMA_BASE,
+    OLLAMA_URL,
+    TRANSLATION_MODEL,
+    OllamaClient,
+    detection_client,
+    translation_client,
+)
 
 __all__ = [
-    "OLClient",
-    "MODEL_NAME",
+    "OllamaClient",
+    "detection_client",
+    "translation_client",
+    "DETECTION_MODEL",
+    "TRANSLATION_MODEL",
+    "OLLAMA_BASE",
     "OLLAMA_URL",
-    "TIMEOUT_SECS",
 ]

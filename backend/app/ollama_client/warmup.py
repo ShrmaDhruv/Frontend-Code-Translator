@@ -5,17 +5,15 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-from app.ollama_client.local_ollama import MODEL_NAME as QWEN_MODEL
-from app.phi_client.phi3_client import MODEL_NAME as PHI3_MODEL
+from app.ollama_client.client import DETECTION_MODEL, OLLAMA_BASE, TRANSLATION_MODEL
 
 load_dotenv()
 
-OLLAMA_BASE_URL     = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
-OLLAMA_CHAT_URL     = f"{OLLAMA_BASE_URL}/api/chat"
+OLLAMA_CHAT_URL     = f"{OLLAMA_BASE}/api/chat"
 OLLAMA_KEEP_ALIVE   = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 WARMUP_TIMEOUT_SECS = int(os.getenv("OLLAMA_WARMUP_TIMEOUT_SECS", "240"))
 
-REQUIRED_MODELS = (QWEN_MODEL, PHI3_MODEL)
+REQUIRED_MODELS = (DETECTION_MODEL, TRANSLATION_MODEL)
 
 
 @dataclass(frozen=True)
@@ -26,7 +24,7 @@ class WarmupResult:
 
 
 def warm_required_models() -> list[WarmupResult]:
-    if not OLLAMA_BASE_URL:
+    if not OLLAMA_BASE:
         raise RuntimeError(
             "[warmup] OLLAMA_BASE_URL must be set in .env"
         )
@@ -34,7 +32,7 @@ def warm_required_models() -> list[WarmupResult]:
     import requests
 
     session = requests.Session()
-    session.get(OLLAMA_BASE_URL, timeout=5).raise_for_status()
+    session.get(OLLAMA_BASE, timeout=5).raise_for_status()
 
     results: list[WarmupResult] = []
     for model in REQUIRED_MODELS:

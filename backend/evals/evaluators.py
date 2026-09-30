@@ -4,7 +4,7 @@ Evaluators for the golden translation dataset.
 Cheap, deterministic checks (run in the same pass as the pipeline):
     detection_correct   source framework detected correctly
     ir_*_recall         share of expected IR names the extractor found
-    translation_valid   pipeline's final output passed translation_validator
+    translation_valid   pipeline's final output passed translation.validator
 
 LLM judge (run as a separate pass so the judge model doesn't evict the
 translator model from GPU memory between every example):

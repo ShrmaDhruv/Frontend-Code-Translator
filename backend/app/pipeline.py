@@ -6,9 +6,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from app.ast_layer import extract_ir
-from app.ast_layer.ir_schema import IR
-from app.detector import DetectionResult, detect
+from app.ir import extract_ir
+from app.ir.schema import IR
+from app.detection.rule_detector import DetectionResult, detect
 from app.translation import TranslationResult, translate_ir
 
 
@@ -105,7 +105,7 @@ def detect_source(
     winner_confidence = layer1.confidence.get(layer1.detected, 0)
 
     if layer1.is_ambiguous and use_llm_detection:
-        from app.layer3 import detect_with_llm
+        from app.detection.llm_detector import detect_with_llm
 
         try:
             layer3 = detect_with_llm(code, layer1.scores)

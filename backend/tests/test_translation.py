@@ -12,9 +12,9 @@ if hasattr(sys.stdout, "reconfigure"):
 warnings.filterwarnings("ignore")
 
 from app.translation.response_cleaner       import clean
-from app.translation.translation_validator  import validate_translation
+from app.translation.validator  import validate_translation
 from app.translation.prompt_builder         import build_messages
-from app.ast_layer.ir_schema import (
+from app.ir.schema import (
     IR, IRState, IRProp, IRMethod, IRLifecycle, IRComputed, IRImport
 )
 

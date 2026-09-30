@@ -94,7 +94,7 @@ def _print_summary(results) -> None:
 def run_pipeline_pass(args) -> None:
     from langsmith import Client
 
-    # Read at call time by pre_parser / ir_builder, so setting them here is enough.
+    # Read at call time by pre_parser / ir.builder, so setting them here is enough.
     os.environ["AST_PARSER"] = args.parser
     os.environ["IR_MODE"] = args.ir_mode
 

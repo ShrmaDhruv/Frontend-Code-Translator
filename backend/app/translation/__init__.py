@@ -7,13 +7,13 @@ Translates frontend code from one framework to another using a
 three-stage pipeline:
 
   Stage 1 — AST extraction
-      raw code → pre_parser → ir_builder → validated IR
+      raw code → pre_parser → ir.builder → validated IR
 
   Stage 2 — Translation
-      IR + target framework → prompt_builder → Phi3Client → raw response
+      IR + target framework → prompt_builder → translation model (Ollama) → raw response
 
   Stage 3 — Cleaning and validation
-      raw response → response_cleaner → translation_validator
+      raw response → response_cleaner → validator
       if critical errors → one retry with error context
 
 The source framework is provided by the caller (already determined
@@ -30,11 +30,11 @@ Usage:
 
 from dataclasses import dataclass, field
 
-from app.ast_layer              import extract_ir
-from app.ast_layer.ir_schema    import IR
+from app.ir              import extract_ir
+from app.ir.schema    import IR
 from app.translation.prompt_builder      import build_messages
 from app.translation.response_cleaner    import clean
-from app.translation.translation_validator import validate_translation
+from app.translation.validator import validate_translation
 
 MAX_NEW_TOKENS = 2048
 TEMPERATURE    = 0.1
@@ -55,8 +55,8 @@ class TranslationResult:
 
 
 def _get_client():
-    from app.phi_client import Phi3Client
-    return Phi3Client()
+    from app.ollama_client import translation_client
+    return translation_client()
 
 
 def _run_translation(
@@ -102,10 +102,10 @@ def translate_ir(
     source_code: str | None = None,
 ) -> TranslationResult:
     """
-    Translate an already-built IR into the target framework using Phi3.
+    Translate an already-built IR into the target framework using the translation model.
 
     Use this when AST/IR extraction has already happened and you want
-    the full generated code output from the Phi layer directly.
+    the full generated code output from the translation model directly.
     """
     if target not in SUPPORTED:
         raise ValueError(
@@ -126,8 +126,8 @@ def translate_ir(
     client = _get_client()
     if not client.is_available():
         raise RuntimeError(
-            "Ollama/Phi3 is not reachable at localhost:11434.\n"
-            "Run: ollama serve"
+            "Ollama translation model is not reachable.\n"
+            "Check OLLAMA_BASE_URL or run: ollama serve"
         )
 
     translated = _run_translation(ir, target, client, source_code=source_code)
@@ -168,7 +168,7 @@ def translate(
 
     Raises:
         ValueError   if source or target framework is not supported
-        RuntimeError if Ollama/Phi3 is unreachable
+        RuntimeError if Ollama is unreachable
     """
     if source not in SUPPORTED:
         raise ValueError(

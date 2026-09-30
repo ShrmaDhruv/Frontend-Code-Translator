@@ -27,7 +27,7 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 
 ### AI / Pipeline
 - Ollama
-- Qwen / Phi-style local chat clients
+- Qwen2.5-Coder models (3B for detection/IR review, 14B for translation)
 - Rule-based framework detection
 - Framework-neutral IR schema
 - Translation response cleaning and validation
@@ -45,22 +45,27 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 │   ├── app/
 │   │   ├── main.py             # FastAPI backend server (app = FastAPI())
 │   │   ├── pipeline.py         # Main detection → IR → translation orchestrator
-│   │   ├── detector.py         # Layer 1 rule-based framework detection engine
-│   │   ├── hf_client.py        # Legacy HF/transformers client (not on the runtime path)
-│   │   ├── ast_layer/          # Framework extractors and IR builder/schema/validator
-│   │   ├── layer3/             # LLM fallback detection for ambiguous inputs
-│   │   ├── ollama_client/      # Ollama client and model warmup helpers
-│   │   ├── phi_client/         # Translation model client wrapper
-│   │   ├── rules/              # Regex-based framework detection rules
-│   │   └── translation/        # Translation prompt, cleaner, and validator
+│   │   ├── detection/
+│   │   │   ├── rule_detector.py    # Layer 1 rule-based framework detection engine
+│   │   │   ├── rules/              # Weighted regex rules per framework
+│   │   │   └── llm_detector/       # Layer 3 LLM fallback for ambiguous inputs
+│   │   ├── ir/
+│   │   │   ├── pre_parser.py       # Source → summary dict (tree-sitter, regex fallback)
+│   │   │   ├── treesitter/         # Tree-sitter extractors (default)
+│   │   │   ├── regex/              # Legacy regex extractors (fallback)
+│   │   │   ├── builder.py          # Summary → IR (facts | hybrid | llm modes)
+│   │   │   ├── schema.py           # Framework-neutral IR dataclasses
+│   │   │   └── validator.py        # IR validation
+│   │   ├── ollama_client/      # Shared Ollama client (detection + translation models), retry, warmup
+│   │   └── translation/        # Translation prompts, cleaner, and output validator
+│   ├── evals/                  # LangSmith golden dataset, evaluators, judge calibration
 │   └── tests/                  # Python test suite (pytest)
 ├── frontend/
-│   ├── App.jsx                 # React entry point
 │   ├── index.html              # Parcel HTML entry
 │   ├── package.json
 │   ├── scripts/                # Parcel dev/build runner
-│   └── src/                    # React frontend application
-├── dockerfile                  # Multi-stage frontend/backend Docker build
+│   └── src/                    # React frontend (main.jsx entry, App.jsx, components/)
+├── Dockerfile                  # Multi-stage frontend/backend Docker build
 └── docker-compose.yml          # Backend + Ollama service setup
 ```
 

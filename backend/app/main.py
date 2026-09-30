@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -12,13 +11,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.ollama_client import OLLAMA_BASE
 from app.ollama_client.warmup import REQUIRED_MODELS, warm_required_models
 from app.pipeline import AUTO_DETECT, SUPPORTED_FRAMEWORKS, detect_source, run_pipeline
 
 load_dotenv()
 
-
-OLLAMA_BASE  = os.getenv("OLLAMA_BASE_URL", "http://ec2-13-203-67-50.ap-south-1.compute.amazonaws.com:11434/")
 
 Framework = Literal["Auto Detect", "React", "Vue", "Angular", "HTML"]
 ConcreteFramework = Literal["React", "Vue", "Angular", "HTML"]

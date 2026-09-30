@@ -5,12 +5,12 @@ missing imports, empty functions, undefined template references, DOM APIs in com
 Run: python -m pytest tests/test_translation_fixes.py -q
 """
 
-from app.ast_layer.ir_schema import IR
+from app.ir.schema import IR
 from app.translation import empty_functions
 from app.translation.imports import add_missing_imports, find_missing
 from app.translation.response_cleaner import _sanitize_output
 from app.translation.template_refs import undefined_template_refs
-from app.translation.translation_validator import validate_translation
+from app.translation.validator import validate_translation
 
 
 def errors_for(code: str, target: str) -> list[str]:

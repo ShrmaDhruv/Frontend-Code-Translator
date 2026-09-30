@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from app.ast_layer.ir_builder import build_facts_ir, merge_ir, review_reasons
-from app.ast_layer.ir_schema import IR, IRLifecycle, IRMethod, IRState
-from app.ast_layer.pre_parser import parse
+from app.ir.builder import build_facts_ir, merge_ir, review_reasons
+from app.ir.schema import IR, IRLifecycle, IRMethod, IRState
+from app.ir.pre_parser import parse
 
 
 def names(items):

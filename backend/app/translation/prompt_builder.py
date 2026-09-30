@@ -1,4 +1,4 @@
-from app.ast_layer.ir_schema import IR
+from app.ir.schema import IR
 
 SUPPORTED_TARGETS = {"React", "Vue", "Angular", "HTML"}
 
@@ -1188,13 +1188,13 @@ def build_messages(
     Build Ollama messages list for translation.
 
     Args:
-        ir               : Validated IR instance from ir_builder
+        ir               : Validated IR instance from ir.builder
         target_framework : One of React | Vue | Angular | HTML
         source_code      : Original source code. When provided, this is
                            the highest-priority translation input.
 
     Returns:
-        messages list for Phi3Client.chat()
+        messages list for OllamaClient.chat()
 
     Raises:
         ValueError if target_framework is not supported

@@ -203,7 +203,7 @@ def clean(raw: str, target_framework: str) -> str:
     Falls back to the stripped raw response if all strategies fail.
 
     Args:
-        raw              : Raw string from Phi3Client.chat()
+        raw              : Raw string from OllamaClient.chat()
         target_framework : One of React | Vue | Angular | HTML
                            Used to guide marker-based extraction
 

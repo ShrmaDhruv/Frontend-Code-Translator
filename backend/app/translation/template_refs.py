@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-from app.ast_layer.treesitter.common import (
+from app.ir.treesitter.common import (
     field, html_all_attrs, identifiers, imports, parse, text, walk,
 )
 
@@ -71,8 +71,8 @@ def _script_names(script: str, grammar: str) -> set[str]:
 # ── Vue ───────────────────────────────────────────────────────────────────────
 
 def _vue(code: str) -> list[str]:
-    from app.ast_layer.treesitter.vue import split_sfc
-    from app.ast_layer.treesitter.vue import extract as extract_vue
+    from app.ir.treesitter.vue import split_sfc
+    from app.ir.treesitter.vue import extract as extract_vue
 
     blocks = split_sfc(code)
     if not blocks["is_setup"] or not blocks["template"]:
@@ -105,7 +105,7 @@ def _strip_pipes(expression: str) -> str:
 
 
 def _angular(code: str) -> list[str]:
-    from app.ast_layer.treesitter import angular
+    from app.ir.treesitter import angular
 
     root = parse(code, "typescript")
     _, decorator = angular._find_component(root)
