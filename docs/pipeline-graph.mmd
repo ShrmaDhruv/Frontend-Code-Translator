@@ -1,0 +1,44 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	check_input(check_input)
+	detect_rules(detect_rules)
+	detect_llm(detect_llm)
+	ask_user(ask_user)
+	pre_parse(pre_parse)
+	build_facts_ir(build_facts_ir)
+	review_ir(review_ir)
+	validate_ir(validate_ir)
+	translate(translate)
+	clean_output(clean_output)
+	validate_output(validate_output)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> check_input;
+	ask_user --> finalize;
+	build_facts_ir -.-> review_ir;
+	build_facts_ir -.-> validate_ir;
+	check_input --> detect_rules;
+	clean_output --> validate_output;
+	detect_llm -.-> ask_user;
+	detect_llm -.-> finalize;
+	detect_llm -.-> pre_parse;
+	detect_rules -.-> ask_user;
+	detect_rules -.-> detect_llm;
+	detect_rules -.-> finalize;
+	detect_rules -.-> pre_parse;
+	pre_parse --> build_facts_ir;
+	review_ir --> validate_ir;
+	translate --> clean_output;
+	validate_ir -.-> finalize;
+	validate_ir -.-> translate;
+	validate_output -.-> finalize;
+	validate_output -.-> translate;
+	finalize --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

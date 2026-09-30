@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -16,6 +17,16 @@ SUPPORTED_FRAMEWORKS = {"React", "Vue", "Angular", "HTML"}
 AUTO_DETECT = "Auto Detect"
 
 StopAfter = Literal["detect", "ir", "translate"]
+
+# "legacy" (hand-rolled flow below) or "graph" (LangGraph, app/graph/)
+PIPELINE_ENGINES = ("legacy", "graph")
+DEFAULT_PIPELINE_ENGINE = "legacy"
+
+LOW_CONFIDENCE_WARNING = "detection confidence is low"
+ASK_USER_ERROR = (
+    "Detection confidence is low. Confirm or override the source framework before extraction."
+)
+SAME_FRAMEWORK_WARNING = "source and target are the same framework - code returned unchanged"
 
 
 @dataclass
@@ -79,6 +90,58 @@ def confidence_label(percent: int) -> str:
     return "low"
 
 
+def manual_detection(source: str) -> PipelineDetection:
+    return PipelineDetection(
+        framework=source,
+        confidence="high",
+        source="manual",
+        ask_user=False,
+    )
+
+
+def rule_detection(layer1: DetectionResult) -> PipelineDetection:
+    """Layer 1 result as the final answer (asks the user when it is ambiguous)."""
+    return PipelineDetection(
+        framework=layer1.detected,
+        confidence=confidence_label(layer1.confidence.get(layer1.detected, 0)),
+        source="layer1",
+        ask_user=layer1.is_ambiguous,
+        confidence_scores=layer1.confidence,
+        raw_scores=layer1.scores,
+        reasoning="Rule-based detector selected the highest scoring framework.",
+    )
+
+
+def llm_detection(code: str, layer1: DetectionResult) -> PipelineDetection:
+    """Layer 3 answer for ambiguous Layer 1 results; asks the user if the LLM is unavailable."""
+    from app.detection.llm_detector import detect_with_llm
+
+    try:
+        layer3 = detect_with_llm(code, layer1.scores)
+    except RuntimeError as exc:
+        return PipelineDetection(
+            framework=layer1.detected,
+            confidence=confidence_label(layer1.confidence.get(layer1.detected, 0)),
+            source="layer1",
+            ask_user=True,
+            confidence_scores=layer1.confidence,
+            raw_scores=layer1.scores,
+            reasoning=(
+                "Rule-based detector was ambiguous and LLM detection was unavailable: "
+                f"{exc}"
+            ),
+        )
+    return PipelineDetection(
+        framework=layer3.detected,
+        confidence=layer3.confidence,
+        source=layer3.source,
+        ask_user=layer3.ask_user,
+        confidence_scores=layer1.confidence,
+        raw_scores=layer1.scores,
+        reasoning=layer3.reasoning,
+    )
+
+
 def detect_source(
     code: str,
     source: str = AUTO_DETECT,
@@ -94,53 +157,12 @@ def detect_source(
     source = normalize_framework(source)
 
     if source != AUTO_DETECT:
-        return PipelineDetection(
-            framework=source,
-            confidence="high",
-            source="manual",
-            ask_user=False,
-        )
+        return manual_detection(source)
 
     layer1: DetectionResult = detect(code)
-    winner_confidence = layer1.confidence.get(layer1.detected, 0)
-
     if layer1.is_ambiguous and use_llm_detection:
-        from app.detection.llm_detector import detect_with_llm
-
-        try:
-            layer3 = detect_with_llm(code, layer1.scores)
-            return PipelineDetection(
-                framework=layer3.detected,
-                confidence=layer3.confidence,
-                source=layer3.source,
-                ask_user=layer3.ask_user,
-                confidence_scores=layer1.confidence,
-                raw_scores=layer1.scores,
-                reasoning=layer3.reasoning,
-            )
-        except RuntimeError as exc:
-            return PipelineDetection(
-                framework=layer1.detected,
-                confidence=confidence_label(winner_confidence),
-                source="layer1",
-                ask_user=True,
-                confidence_scores=layer1.confidence,
-                raw_scores=layer1.scores,
-                reasoning=(
-                    "Rule-based detector was ambiguous and LLM detection was unavailable: "
-                    f"{exc}"
-                ),
-            )
-
-    return PipelineDetection(
-        framework=layer1.detected,
-        confidence=confidence_label(winner_confidence),
-        source="layer1",
-        ask_user=layer1.is_ambiguous,
-        confidence_scores=layer1.confidence,
-        raw_scores=layer1.scores,
-        reasoning="Rule-based detector selected the highest scoring framework.",
-    )
+        return llm_detection(code, layer1)
+    return rule_detection(layer1)
 
 
 def run_pipeline(
@@ -164,6 +186,27 @@ def run_pipeline(
         PipelineResult containing detection metadata, IR, translated code,
         warnings, and errors.
     """
+    engine = pipeline_engine()
+    if engine == "graph":
+        from app.graph import run_graph
+        return run_graph(code, target, source, use_llm_detection, stop_after)
+    return _run_pipeline_legacy(code, target, source, use_llm_detection, stop_after)
+
+
+def pipeline_engine() -> str:
+    engine = os.getenv("PIPELINE_ENGINE", DEFAULT_PIPELINE_ENGINE)
+    if engine not in PIPELINE_ENGINES:
+        raise ValueError(f"PIPELINE_ENGINE must be one of {PIPELINE_ENGINES}, got '{engine}'")
+    return engine
+
+
+def _run_pipeline_legacy(
+    code: str,
+    target: str,
+    source: str,
+    use_llm_detection: bool,
+    stop_after: StopAfter,
+) -> PipelineResult:
     target = normalize_framework(target)
     if target == AUTO_DETECT:
         raise ValueError("target must be a concrete framework, not Auto Detect")
@@ -177,7 +220,7 @@ def run_pipeline(
             target=target,
             stage="detect",
             detection=detection,
-            warnings=["detection confidence is low"] if detection.ask_user else [],
+            warnings=[LOW_CONFIDENCE_WARNING] if detection.ask_user else [],
         )
 
     if detection.ask_user:
@@ -187,9 +230,7 @@ def run_pipeline(
             target=target,
             stage="detect",
             detection=detection,
-            errors=[
-                "Detection confidence is low. Confirm or override the source framework before extraction."
-            ],
+            errors=[ASK_USER_ERROR],
         )
 
     ir = extract_ir(code, detection.framework)
@@ -213,7 +254,7 @@ def run_pipeline(
             detection=detection,
             ir=ir,
             translated_code=code,
-            warnings=["source and target are the same framework - code returned unchanged"],
+            warnings=[SAME_FRAMEWORK_WARNING],
         )
 
     translated: TranslationResult = translate_ir(ir, target, source_code=code)

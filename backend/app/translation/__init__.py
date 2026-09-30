@@ -42,6 +42,8 @@ MAX_TRANSLATION_ATTEMPTS = 3
 
 SUPPORTED = {"React", "Vue", "Angular", "HTML"}
 
+NO_TRANSLATION_WARNING = "source and target are the same framework - no translation generated"
+
 
 @dataclass
 class TranslationResult:
@@ -59,41 +61,44 @@ def _get_client():
     return translation_client()
 
 
-def _run_translation(
+def get_translator(check: bool = True):
+    """Translation model client; with check, raises RuntimeError if Ollama is unreachable."""
+    client = _get_client()
+    if check and not client.is_available():
+        raise RuntimeError(
+            "Ollama translation model is not reachable.\n"
+            "Check OLLAMA_BASE_URL or run: ollama serve"
+        )
+    return client
+
+
+def translation_messages(
     ir: IR,
     target: str,
-    client,
     source_code: str | None = None,
-) -> str:
+    errors: list[str] | None = None,
+) -> list[dict]:
+    """First-attempt prompt, or the retry prompt when the last attempt's errors are given."""
     messages = build_messages(ir, target, source_code=source_code)
-    raw      = client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
-    return clean(raw, target)
+    if errors:
+        error_str = "\n".join(f"  - {e}" for e in errors)
+        messages.append({
+            "role": "assistant",
+            "content": "[previous translation had issues]",
+        })
+        messages.append({
+            "role": "user",
+            "content": (
+                f"Your previous translation had these problems:\n{error_str}\n\n"
+                "Use the original source code as the source of truth and the IR only as a checklist. "
+                f"Please fix them and return only the corrected {target} code with zero comments."
+            ),
+        })
+    return messages
 
 
-def _retry_prompt(
-    ir: IR,
-    target: str,
-    errors: list[str],
-    client,
-    source_code: str | None = None,
-) -> str:
-    from app.translation.prompt_builder import build_messages as bm
-    messages = bm(ir, target, source_code=source_code)
-    error_str = "\n".join(f"  - {e}" for e in errors)
-    messages.append({
-        "role": "assistant",
-        "content": "[previous translation had issues]",
-    })
-    messages.append({
-        "role": "user",
-        "content": (
-            f"Your previous translation had these problems:\n{error_str}\n\n"
-            "Use the original source code as the source of truth and the IR only as a checklist. "
-            f"Please fix them and return only the corrected {target} code with zero comments."
-        ),
-    })
-    raw = client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
-    return clean(raw, target)
+def request_translation(client, messages: list[dict]) -> str:
+    return client.chat(messages, max_new_tokens=MAX_NEW_TOKENS, temperature=TEMPERATURE)
 
 
 def translate_ir(
@@ -119,25 +124,22 @@ def translate_ir(
             code="",
             source=ir.framework,
             target=target,
-            warnings=["source and target are the same framework - no translation generated"],
+            warnings=[NO_TRANSLATION_WARNING],
             ir=ir,
         )
 
-    client = _get_client()
-    if not client.is_available():
-        raise RuntimeError(
-            "Ollama translation model is not reachable.\n"
-            "Check OLLAMA_BASE_URL or run: ollama serve"
-        )
+    client   = get_translator()
+    errors   = None
+    attempts = 0
 
-    translated = _run_translation(ir, target, client, source_code=source_code)
-    validation = validate_translation(translated, ir, target)
-    attempts = 1
-
-    while not validation.is_valid and attempts < MAX_TRANSLATION_ATTEMPTS:
-        translated = _retry_prompt(ir, target, validation.errors, client, source_code=source_code)
+    while True:
+        raw        = request_translation(client, translation_messages(ir, target, source_code, errors))
+        translated = clean(raw, target)
         validation = validate_translation(translated, ir, target)
-        attempts += 1
+        attempts  += 1
+        if validation.is_valid or attempts >= MAX_TRANSLATION_ATTEMPTS:
+            break
+        errors = validation.errors
 
     return TranslationResult(
         ok       = validation.is_valid,
@@ -194,4 +196,9 @@ __all__ = [
     "translate",
     "translate_ir",
     "TranslationResult",
+    "get_translator",
+    "translation_messages",
+    "request_translation",
+    "MAX_TRANSLATION_ATTEMPTS",
+    "NO_TRANSLATION_WARNING",
 ]

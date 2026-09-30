@@ -521,15 +521,29 @@ def build_ir(summary: dict) -> IR:
         ValueError  if the chosen IR is the facts IR and it is invalid
     """
     facts_ir = build_facts_ir(summary)
+    ir = llm_ir(summary, facts_ir) if review_needed(summary, facts_ir) else facts_ir
+    return ensure_valid(ir, facts_ir)
+
+
+def review_needed(summary: dict, facts_ir: IR) -> list[str]:
+    """Why the LLM should be involved under the current IR_MODE (empty = facts only)."""
     mode = ir_mode()
-
     if mode == "facts":
-        ir = facts_ir
-    elif mode == "hybrid":
-        ir = _hybrid_ir(summary, facts_ir)
-    else:
-        ir = _legacy_llm_ir(summary, facts_ir)
+        return []
+    if mode == "llm":
+        return ["IR_MODE=llm"]
+    return review_reasons(summary, facts_ir)
 
+
+def llm_ir(summary: dict, facts_ir: IR) -> IR:
+    """LLM-assisted IR for the current IR_MODE; returns facts_ir on any LLM failure."""
+    if ir_mode() == "llm":
+        return _legacy_llm_ir(summary, facts_ir)
+    return _hybrid_ir(summary, facts_ir)
+
+
+def ensure_valid(ir: IR, facts_ir: IR) -> IR:
+    """LLM results are validated before use; a facts IR fallback must be valid itself."""
     if ir is facts_ir:
         result = validate(facts_ir)
         if not result.is_valid:
