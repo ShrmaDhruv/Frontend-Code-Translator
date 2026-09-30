@@ -17,9 +17,11 @@ const parcelBin = path.join(
 mkdirSync(tempDir, { recursive: true });
 
 const args = mode === "build" ? ["build", "index.html"] : ["index.html"];
-const child = spawn(parcelBin, args, {
+const useShell = process.platform === "win32";
+// With shell: true the command is passed to cmd.exe unquoted, so quote it for paths with spaces.
+const child = spawn(useShell ? `"${parcelBin}"` : parcelBin, args, {
   cwd: root,
-  shell: process.platform === "win32",
+  shell: useShell,
   env: {
     ...process.env,
     TMP: tempDir,

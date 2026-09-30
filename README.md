@@ -118,23 +118,35 @@ venv\Scripts\activate   # or `source venv/bin/activate` on macOS/Linux
 pip install -r requirements.txt
 ```
 
-### Run the Frontend
+### Run the Whole App
+
+Build the frontend once, then start the backend; it serves the UI and the API together on port 8000:
 
 ```bash
 cd frontend
-npm run dev
-```
+npm install
+npm run build          # → frontend/dist
 
-### Run the Backend
-
-Run from inside `backend/`, so the `app` package resolves correctly:
-
-```bash
-cd backend
+cd ../backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-By default, the frontend calls `/api/pipeline`. If running frontend and backend separately, configure your dev proxy or update `frontend/src/constants.js` to point to your backend URL.
+Open http://localhost:8000. `/health` shows which frontend build is served and the Ollama model warm-up status (warm-up runs in the background, so the server is usable immediately).
+
+The backend looks for the built UI in `FRONTEND_DIST`, then `backend/dist` (Docker image), then `frontend/dist`. Without a build it serves the API only.
+
+Environment variables (in the root `.env`):
+
+| Variable | Purpose |
+|---|---|
+| `OLLAMA_BASE_URL` | Ollama server URL |
+| `CORS_ORIGINS` | Comma-separated origins allowed to call the API from another origin (default: the Parcel dev server, `http://localhost:1234`) |
+| `OLLAMA_WARMUP` | `0` disables model warm-up at startup |
+| `FRONTEND_DIST` | Override the built-frontend directory |
+
+### Frontend Dev Server
+
+`npm run dev` in `frontend/` starts Parcel on port 1234 with hot reload. The UI calls the relative `/api/pipeline`, so while using the dev server point `API_URL` in `frontend/src/constants.js` at `http://127.0.0.1:8000/api/pipeline`.
 
 The CLI pipeline entry point (`backend/app/pipeline.py`) should likewise be run as a module from inside `backend/`: `python -m app.pipeline <file> --target Vue`.
 
