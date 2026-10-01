@@ -31,6 +31,7 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 - Rule-based framework detection
 - Framework-neutral IR schema
 - Translation response cleaning and validation
+- Security guardrails: input guard, prompt hardening, output capability check
 
 ### DevOps
 - Docker
@@ -42,26 +43,24 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 .
 ├── backend/
 │   ├── requirements.txt        # Python dependencies
-│   ├── app/
-│   │   ├── main.py             # FastAPI backend server (app = FastAPI())
-│   │   ├── pipeline.py         # Public entry (run_pipeline, detect_source) + CLI
-│   │   ├── graph/              # LangGraph StateGraph: state, nodes, routing, builder
-│   │   ├── detection/
-│   │   │   ├── rule_detector.py    # Layer 1 rule-based framework detection engine
-│   │   │   ├── rules/              # Weighted regex rules per framework
-│   │   │   └── llm_detector/       # Layer 3 LLM fallback for ambiguous inputs
-│   │   ├── ir/
-│   │   │   ├── pre_parser.py       # Source → summary dict (tree-sitter, regex fallback)
-│   │   │   ├── treesitter/         # Tree-sitter extractors (default)
-│   │   │   ├── regex/              # Legacy regex extractors (fallback)
-│   │   │   ├── builder.py          # Summary → IR (facts | hybrid | llm modes)
-│   │   │   ├── schema.py           # Framework-neutral IR dataclasses
-│   │   │   └── validator.py        # IR validation
-│   │   ├── security/           # Guardrails: API limits, input guard, prompt hardening
-│   │   ├── ollama_client/      # Shared Ollama client (detection + translation models), retry, warmup
-│   │   └── translation/        # Translation prompts, cleaner, and output validator
-│   ├── evals/                  # LangSmith golden dataset, evaluators, judge calibration
-│   └── tests/                  # Python test suite (pytest)
+│   └── app/
+│       ├── main.py             # FastAPI backend server (app = FastAPI())
+│       ├── pipeline.py         # Public entry (run_pipeline, detect_source) + CLI
+│       ├── graph/              # LangGraph StateGraph: state, nodes, routing, builder
+│       ├── detection/
+│       │   ├── rule_detector.py    # Layer 1 rule-based framework detection engine
+│       │   ├── rules/              # Weighted regex rules per framework
+│       │   └── llm_detector/       # Layer 3 LLM fallback for ambiguous inputs
+│       ├── ir/
+│       │   ├── pre_parser.py       # Source → summary dict (tree-sitter, regex fallback)
+│       │   ├── treesitter/         # Tree-sitter extractors (default)
+│       │   ├── regex/              # Legacy regex extractors (fallback)
+│       │   ├── builder.py          # Summary → IR (facts | hybrid | llm modes)
+│       │   ├── schema.py           # Framework-neutral IR dataclasses
+│       │   └── validator.py        # IR validation
+│       ├── security/           # Guardrails: API limits, input guard, prompt hardening, output guard
+│       ├── ollama_client/      # Shared Ollama client (detection + translation models), retry, warmup
+│       └── translation/        # Translation prompts, cleaner, and output validator
 ├── frontend/
 │   ├── index.html              # Parcel HTML entry
 │   ├── package.json
@@ -73,7 +72,7 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 
 ## How the Pipeline Works
 
-The pipeline is a LangGraph `StateGraph` (`backend/app/graph/`); each step below is a node, and the branches (LLM detection, IR review, translation retries) are conditional edges. Diagram: [`docs/pipeline-graph.png`](docs/pipeline-graph.png).
+The pipeline is a LangGraph `StateGraph` (`backend/app/graph/`); each step below is a node, and the branches (LLM detection, IR review, translation retries) are conditional edges.
 
 1. **Input**: The user pastes frontend code and chooses a target framework.
 2. **Detection**: The backend identifies the source framework using weighted rules. If the result is ambiguous, an Ollama-backed LLM detector can be used.
@@ -152,20 +151,6 @@ Environment variables (in the root `.env`):
 | `MAX_CODE_CHARS` / `MAX_CODE_LINES` | Input size limits (default `20000` / `1000`) |
 | `INJECTION_POLICY` | `block` (default) rejects input with high-risk prompt-injection text; `warn` only warns |
 
-## Security
-
-Guardrails live in `backend/app/security/`:
-
-- **API limits** (`api_limits.py`): body size limit, per-IP rate limit, concurrent pipeline cap, security headers (CSP, `X-Frame-Options`, `nosniff`), API docs off by default, internal errors (e.g. the Ollama host) never returned to clients.
-- **Input guard** (`input_guard.py`): before the graph runs, strips invisible/bidi/tag Unicode characters and chat-template tokens (`<|im_start|>`, `[INST]`, ...) and masks secrets (cloud keys, API tokens, JWTs, private keys). The `check_input` node then enforces size limits, rejects input that isn't code, and scores prompt-injection text (high-risk → blocked with `stage: "input"`, low-risk → warning).
-- **Prompt hardening** (`prompt_guard.py`): user code and anything derived from it (IR, summaries) goes into tags with a random per-prompt id; every system prompt says tagged content is data, not instructions; the translation prompt repeats the rules after the input and forbids adding network calls, scripts, or URLs; a canary in the system prompt withholds any output that leaks it.
-
-- **Output guard** (`output_guard.py`, graph node `guard_output`): compares what the translation can do with what the source can do. Network requests, dynamic code (`eval`), cookie/storage access, navigation, raw HTML injection, embedded external content, new URL hosts, or new npm packages that the source does not have fail validation, are fed back for a retry, and the code is withheld if they survive the last attempt.
-
-Attack test set: `python -m evals.security.run_attacks --name full` (38 cases: 33 attacks, 5 benign controls; needs Ollama). `--disable input output` switches guard layers off to measure each one.
-
-Rate limit and concurrency state are per process; behind a reverse proxy run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply per real client.
-
 ### Frontend Dev Server
 
 `npm run dev` in `frontend/` starts Parcel on port 1234 with hot reload. The UI calls the relative `/api/pipeline`, so while using the dev server point `API_URL` in `frontend/src/constants.js` at `http://127.0.0.1:8000/api/pipeline`.
@@ -185,14 +170,16 @@ This starts:
 
 The backend is exposed on port `80` by the provided compose file.
 
-## Testing
+## Security
 
-Run the Python test suite from `backend/`:
+Guardrails live in `backend/app/security/`:
 
-```bash
-cd backend
-python -m pytest -q
-```
+- **API limits** (`api_limits.py`): body size limit, per-IP rate limit, concurrent pipeline cap, security headers (CSP, `X-Frame-Options`, `nosniff`), API docs off by default, internal errors (e.g. the Ollama host) never returned to clients.
+- **Input guard** (`input_guard.py`): before the graph runs, strips invisible/bidi/tag Unicode characters and chat-template tokens (`<|im_start|>`, `[INST]`, ...) and masks secrets (cloud keys, API tokens, JWTs, private keys). The `check_input` node then enforces size limits, rejects input that isn't code, and scores prompt-injection text (high-risk → blocked with `stage: "input"`, low-risk → warning).
+- **Prompt hardening** (`prompt_guard.py`): user code and anything derived from it (IR, summaries) goes into tags with a random per-prompt id; every system prompt says tagged content is data, not instructions; the translation prompt repeats the rules after the input and forbids adding network calls, scripts, or URLs; a canary in the system prompt withholds any output that leaks it.
+- **Output guard** (`output_guard.py`, graph node `guard_output`): compares what the translation can do with what the source can do. Network requests, dynamic code (`eval`), cookie/storage access, navigation, raw HTML injection, embedded external content, new URL hosts, or new npm packages that the source does not have fail validation, are fed back for a retry, and the code is withheld if they survive the last attempt.
+
+Rate limit and concurrency state are per process; behind a reverse proxy run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply per real client.
 
 ## Example Use Case
 
