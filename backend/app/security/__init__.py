@@ -4,6 +4,7 @@ Security guardrails.
     api_limits    Layer 1: body size, rate limit, concurrency cap, security headers (app/main.py)
     input_guard   Layer 2: sanitize + inspect user code (graph: run_graph + check_input node)
     prompt_guard  Layer 3: random-boundary tags, untrusted-input rules, canary (prompt builders)
+    output_guard  Layer 4: capability diff between source and translation (graph: guard_output node)
 
 Plan and rationale: claude-logs/security-plan.md
 """

@@ -34,6 +34,7 @@ class PipelineState(TypedDict, total=False):
     raw_output:      str
     translated_code: str
     validation:      TranslationValidationResult
+    output_violations: list[str]   # output guard findings for the latest attempt
     attempts:        int
 
     # Outcome

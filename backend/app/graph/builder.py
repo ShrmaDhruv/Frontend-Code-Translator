@@ -3,7 +3,7 @@ Builds the translation pipeline as a LangGraph StateGraph.
 
     [sanitize_input] → check_input (input guard; blocked → finalize) → detect_rules → [detect_llm] → [ask_user] → pre_parse
     → build_facts_ir → [review_ir] → validate_ir
-    → translate → clean_output → validate_output (↺ translate, up to 3 attempts)
+    → translate → clean_output → validate_output → guard_output (↺ translate, up to 3 attempts)
     → finalize
 
 See claude-logs/langgraph-plan.md for the design.
@@ -20,7 +20,7 @@ from app.graph.state import PipelineState
 from app.pipeline import PipelineResult
 from app.security import sanitize_input
 
-# Longest path is 17 steps (LLM detection + IR review + 3 translation attempts).
+# Longest path is 20 steps (LLM detection + IR review + 3 translation attempts of 4 nodes each).
 RECURSION_LIMIT = 40
 
 
@@ -31,7 +31,7 @@ def get_graph():
     for name in (
         "check_input", "detect_rules", "detect_llm", "ask_user",
         "pre_parse", "build_facts_ir", "review_ir", "validate_ir",
-        "translate", "clean_output", "validate_output", "finalize",
+        "translate", "clean_output", "validate_output", "guard_output", "finalize",
     ):
         graph.add_node(name, getattr(nodes, name))
 
@@ -50,7 +50,8 @@ def get_graph():
 
     graph.add_edge("translate", "clean_output")
     graph.add_edge("clean_output", "validate_output")
-    graph.add_conditional_edges("validate_output", routing.after_validation, ["translate", "finalize"])
+    graph.add_edge("validate_output", "guard_output")
+    graph.add_conditional_edges("guard_output", routing.after_validation, ["translate", "finalize"])
     graph.add_edge("finalize", END)
 
     return graph.compile()

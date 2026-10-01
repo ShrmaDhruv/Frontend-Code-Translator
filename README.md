@@ -80,7 +80,7 @@ The pipeline is a LangGraph `StateGraph` (`backend/app/graph/`); each step below
 3. **IR Extraction**: Framework-specific extractors collect structural hints such as props, state, lifecycle hooks, imports, methods, template bindings, and styles.
 4. **IR Building**: The hints are converted into a framework-neutral intermediate representation.
 5. **Translation**: The IR and original source code are sent to the local LLM to generate target-framework code.
-6. **Cleaning and Validation**: The generated code is cleaned, checked for framework-specific correctness, and retried (up to 3 attempts, with the validator errors fed back) if validation fails.
+6. **Cleaning and Validation**: The generated code is cleaned, checked for framework-specific correctness and for capabilities the source does not have (output guard), and retried (up to 3 attempts, with the errors fed back) if either check fails.
 7. **Output**: The translated code, confidence, warnings, and errors are returned to the frontend.
 
 ## API Endpoints
@@ -159,6 +159,10 @@ Guardrails live in `backend/app/security/`:
 - **API limits** (`api_limits.py`): body size limit, per-IP rate limit, concurrent pipeline cap, security headers (CSP, `X-Frame-Options`, `nosniff`), API docs off by default, internal errors (e.g. the Ollama host) never returned to clients.
 - **Input guard** (`input_guard.py`): before the graph runs, strips invisible/bidi/tag Unicode characters and chat-template tokens (`<|im_start|>`, `[INST]`, ...) and masks secrets (cloud keys, API tokens, JWTs, private keys). The `check_input` node then enforces size limits, rejects input that isn't code, and scores prompt-injection text (high-risk → blocked with `stage: "input"`, low-risk → warning).
 - **Prompt hardening** (`prompt_guard.py`): user code and anything derived from it (IR, summaries) goes into tags with a random per-prompt id; every system prompt says tagged content is data, not instructions; the translation prompt repeats the rules after the input and forbids adding network calls, scripts, or URLs; a canary in the system prompt withholds any output that leaks it.
+
+- **Output guard** (`output_guard.py`, graph node `guard_output`): compares what the translation can do with what the source can do. Network requests, dynamic code (`eval`), cookie/storage access, navigation, raw HTML injection, embedded external content, new URL hosts, or new npm packages that the source does not have fail validation, are fed back for a retry, and the code is withheld if they survive the last attempt.
+
+Attack test set: `python -m evals.security.run_attacks --name full` (38 cases: 33 attacks, 5 benign controls; needs Ollama). `--disable input output` switches guard layers off to measure each one.
 
 Rate limit and concurrency state are per process; behind a reverse proxy run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply per real client.
 

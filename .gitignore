@@ -12,3 +12,5 @@ frontend-static.err
 /.env
 claude-logs/
 docs/
+tests/
+evals/

@@ -28,9 +28,10 @@ from app.translation import (
     translation_messages,
 )
 from app.security import inspect_input
+from app.security.output_guard import check_output
 from app.security.prompt_guard import leaked_canary
 from app.translation.response_cleaner import clean
-from app.translation.validator import validate_translation
+from app.translation.validator import TranslationValidationResult, validate_translation
 
 
 # ── Input ─────────────────────────────────────────────────────────────────────
@@ -112,11 +113,29 @@ def validate_output(state: PipelineState) -> dict:
     return {"validation": validation, "attempts": state["attempts"] + 1}
 
 
+def guard_output(state: PipelineState) -> dict:
+    """Output guard: capabilities the translation has but the source does not fail validation."""
+    report = check_output(
+        state["code"], state["detection"].framework, state["translated_code"], state["target"],
+    )
+    validation = state["validation"]
+    if report.violations or report.warnings:
+        validation = TranslationValidationResult(
+            is_valid=validation.is_valid and not report.violations,
+            errors=[*validation.errors, *report.violations],
+            warnings=[*validation.warnings, *report.warnings],
+        )
+    return {"validation": validation, "output_violations": report.violations}
+
+
 # ── Result ────────────────────────────────────────────────────────────────────
 
 INPUT_BLOCKED_DETECTION = PipelineDetection(framework="", confidence="none", source="input_guard")
 
 PROMPT_LEAK_ERROR = "the model output contained internal prompt text, so it was withheld"
+OUTPUT_WITHHELD_ERROR = (
+    "the translation was withheld because it added behaviour the source code does not have"
+)
 
 
 def finalize(state: PipelineState) -> dict:
@@ -166,6 +185,11 @@ def finalize(state: PipelineState) -> dict:
         result = PipelineResult(
             ok=False, source=state["ir"].framework, stage="translate", ir=state["ir"],
             errors=[PROMPT_LEAK_ERROR], **base,
+        )
+    elif state.get("output_violations"):
+        result = PipelineResult(
+            ok=False, source=state["ir"].framework, stage="translate", ir=state["ir"],
+            errors=[OUTPUT_WITHHELD_ERROR, *state["output_violations"]], **base,
         )
     else:
         ir, validation = state["ir"], state["validation"]
