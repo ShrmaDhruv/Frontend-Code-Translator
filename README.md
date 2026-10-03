@@ -8,6 +8,7 @@ Front-End Converter is an AI-assisted web application that translates frontend c
 - Converts frontend snippets between React, Vue, Angular, and HTML.
 - Uses a staged pipeline: detection → AST/IR extraction → translation → cleaning/validation.
 - Provides a React-based editor UI for input code, translated output, status, confidence, warnings, and errors.
+- Runs a live preview of the source and the translated component in a sandboxed frame (Sandpack).
 - Exposes FastAPI endpoints for detection, IR generation, and full translation.
 - Supports Docker deployment with an Ollama service for local model inference.
 
@@ -81,6 +82,7 @@ The pipeline is a LangGraph `StateGraph` (`backend/app/graph/`); each step below
 5. **Translation**: The IR and original source code are sent to the local LLM to generate target-framework code.
 6. **Cleaning and Validation**: The generated code is cleaned, checked for framework-specific correctness and for capabilities the source does not have (output guard), and retried (up to 3 attempts, with the errors fed back) if either check fails.
 7. **Output**: The translated code, confidence, warnings, and errors are returned to the frontend.
+8. **Preview** (frontend only): the Preview tab wraps the code in a small project (`frontend/src/preview/sandbox.js`) and runs it in the Sandpack in-browser bundler, inside a frame served from a CodeSandbox origin.
 
 ## API Endpoints
 
@@ -153,7 +155,7 @@ Environment variables (in the root `.env`):
 
 ### Frontend Dev Server
 
-`npm run dev` in `frontend/` starts Parcel on port 1234 with hot reload. The UI calls the relative `/api/pipeline`, so while using the dev server point `API_URL` in `frontend/src/constants.js` at `http://127.0.0.1:8000/api/pipeline`.
+`npm run dev` in `frontend/` starts Parcel on port 1234 with hot reload. The dev build calls the backend at `http://127.0.0.1:8000` (`API_BASE` in `frontend/src/constants.js`), so run the backend locally on port 8000 alongside it. The production build calls the API on its own origin.
 
 The CLI pipeline entry point (`backend/app/pipeline.py`) should likewise be run as a module from inside `backend/`: `python -m app.pipeline <file> --target Vue`.
 
@@ -178,6 +180,7 @@ Guardrails live in `backend/app/security/`:
 - **Input guard** (`input_guard.py`): before the graph runs, strips invisible/bidi/tag Unicode characters and chat-template tokens (`<|im_start|>`, `[INST]`, ...) and masks secrets (cloud keys, API tokens, JWTs, private keys). The `check_input` node then enforces size limits, rejects input that isn't code, and scores prompt-injection text (high-risk → blocked with `stage: "input"`, low-risk → warning).
 - **Prompt hardening** (`prompt_guard.py`): user code and anything derived from it (IR, summaries) goes into tags with a random per-prompt id; every system prompt says tagged content is data, not instructions; the translation prompt repeats the rules after the input and forbids adding network calls, scripts, or URLs; a canary in the system prompt withholds any output that leaks it.
 - **Output guard** (`output_guard.py`, graph node `guard_output`): compares what the translation can do with what the source can do. Network requests, dynamic code (`eval`), cookie/storage access, navigation, raw HTML injection, embedded external content, new URL hosts, or new npm packages that the source does not have fail validation, are fed back for a retry, and the code is withheld if they survive the last attempt.
+- **Live preview isolation**: previewed code runs in a cross-origin frame (`*.codesandbox.io`, the only origin allowed by the CSP `frame-src`), so it cannot reach this page or the API. The frame is given no permission to open popups or navigate the top window. Code is only sent to that frame when the Preview tab is opened.
 
 Rate limit and concurrency state are per process; behind a reverse proxy run uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply per real client.
 
@@ -196,4 +199,4 @@ Paste a React component, choose **Vue** as the target framework, and run the pip
 
 - Translation quality depends on the configured local Ollama model.
 - The pipeline includes fallback IR generation if Ollama is unavailable during IR extraction.
-- Ambiguous detection results may ask for user confirmation or use Layer 3 LLM detection when enabled.
+- Ambiguous detection results use Layer 3 LLM detection when enabled. If confidence is still low, the pipeline stops and the UI asks the user to pick the source framework, then runs again with that choice.

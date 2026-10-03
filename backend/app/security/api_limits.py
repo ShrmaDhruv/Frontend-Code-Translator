@@ -144,6 +144,8 @@ class BodySizeLimitMiddleware:
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+    # The live preview runs translated code in frames served by the Sandpack bundler.
+    "frame-src https://*.codesandbox.io; "
     "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 

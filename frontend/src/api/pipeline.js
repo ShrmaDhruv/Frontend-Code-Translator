@@ -1,11 +1,11 @@
-import { API_URL } from "../constants";
+import { API_BASE } from "../constants";
 
 export async function runPipeline({
   code,
   sourceFramework,
   targetFramework,
 }) {
-  const response = await fetch(API_URL, {
+  const response = await fetch(`${API_BASE}/api/pipeline`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -24,6 +24,14 @@ export async function runPipeline({
   }
 
   return data;
+}
+
+export async function fetchHealth(signal) {
+  const response = await fetch(`${API_BASE}/health`, { signal });
+  if (!response.ok) {
+    throw new Error(`Backend returned ${response.status}`);
+  }
+  return response.json();
 }
 
 // FastAPI validation errors (422) return `detail` as a list of { loc, msg } objects.

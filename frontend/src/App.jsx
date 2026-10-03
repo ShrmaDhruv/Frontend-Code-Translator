@@ -1,134 +1,151 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { runPipeline } from "./api/pipeline";
-import {
-  FRAMEWORK_META,
-  SAMPLE_CODE,
-  SOURCE_OPTIONS,
-  TARGET_OPTIONS,
-} from "./constants";
-import { ControlStrip } from "./components/ControlStrip";
-import { StatusDock } from "./components/StatusDock";
-import { TopBar } from "./components/TopBar";
-import { Workspace } from "./components/Workspace";
+import { AUTO_DETECT, MAX_CODE_CHARS, SAMPLES, SOURCE_OPTIONS, TARGET_OPTIONS } from "./constants";
+import { Header } from "./components/Header";
+import { Notices } from "./components/Notices";
+import { PipelineRail } from "./components/PipelineRail";
+import { ResultPane } from "./components/ResultPane";
+import { RouteBar } from "./components/RouteBar";
+import { SourcePane } from "./components/SourcePane";
+import { useHealth } from "./hooks/useHealth";
+import { usePipeline } from "./hooks/usePipeline";
+import { useTheme } from "./hooks/useTheme";
 
-export default function TranslatorApp() {
-  const [sourceFramework, setSourceFramework] = useState("Auto Detect");
-  const [targetFramework, setTargetFramework] = useState("Vue");
-  const [inputCode, setInputCode] = useState(SAMPLE_CODE);
+// Cheap guess used only to pick syntax highlighting before the backend has detected anything.
+function guessFramework(code) {
+  if (/<template[\s>]|<script\s+setup/.test(code)) return "Vue";
+  if (/@Component\s*\(|@angular\//.test(code)) return "Angular";
+  if (/^\s*<(?!>)/.test(code)) return "HTML";
+  return "React";
+}
+
+export default function App() {
+  const [theme, toggleTheme] = useTheme();
+  const health = useHealth();
+  const { run, start, fail, reset } = usePipeline();
+
+  const [source, setSource] = useState(AUTO_DETECT);
+  const [target, setTarget] = useState("Vue");
+  const [inputCode, setInputCode] = useState(SAMPLES.React);
   const [outputCode, setOutputCode] = useState("");
-  const [stage, setStage] = useState("idle");
-  const [detected, setDetected] = useState("idle");
-  const [confidence, setConfidence] = useState("idle");
-  const [warnings, setWarnings] = useState([]);
-  const [errors, setErrors] = useState([]);
-  const [isRunning, setIsRunning] = useState(false);
-  const [copyLabel, setCopyLabel] = useState("Copy");
+  const [tab, setTab] = useState("code");
 
-  const sourceAccent = FRAMEWORK_META[sourceFramework]?.color || "#93c5fd";
-  const targetAccent = FRAMEWORK_META[targetFramework]?.color || "#42d392";
+  const isRunning = run.status === "running";
+  const detected = TARGET_OPTIONS.includes(run.result?.detection?.framework)
+    ? run.result.detection.framework
+    : null;
+  const sourceLanguage = source !== AUTO_DETECT ? source : detected || guessFramework(inputCode);
 
-  const editorStats = useMemo(
-    () => ({
-      inputLines: inputCode ? inputCode.split("\n").length : 0,
-      outputLines: outputCode ? outputCode.split("\n").length : 0,
-    }),
-    [inputCode, outputCode],
+  const translate = useCallback(
+    async (sourceOverride) => {
+      if (isRunning) return;
+      const sourceFramework = sourceOverride || source;
+
+      setOutputCode("");
+      setTab("code");
+
+      if (!inputCode.trim()) {
+        fail(["Paste some source code before translating."]);
+        return;
+      }
+      if (inputCode.length > MAX_CODE_CHARS) {
+        fail([`The source is longer than the ${MAX_CODE_CHARS.toLocaleString()} character limit.`]);
+        return;
+      }
+
+      const data = await start({ code: inputCode, sourceFramework, targetFramework: target });
+      if (data) setOutputCode(data.translated_code || "");
+    },
+    [fail, inputCode, isRunning, source, start, target],
   );
 
-  const translateCode = async () => {
-    const code = inputCode.trim();
-
-    setErrors([]);
-    setWarnings([]);
-    setCopyLabel("Copy");
-
-    if (!code) {
-      setStage("error");
-      setErrors(["Paste source code before running the pipeline."]);
-      return;
-    }
-
-    setIsRunning(true);
-    setStage("detecting");
-    setDetected("detecting");
-    setConfidence("idle");
-
-    try {
-      const data = await runPipeline({
-        code: inputCode,
-        sourceFramework,
-        targetFramework,
-      });
-
-      setStage(data.stage || "done");
-      setDetected(data.detection?.framework || data.source || "unknown");
-      setConfidence(data.detection?.confidence || "unknown");
-      setWarnings(data.warnings || []);
-      setErrors(data.errors || []);
-      setOutputCode(data.translated_code || "");
-
-      if (data.ok && data.translated_code) {
-        setStage("done");
-      } else if (!data.ok) {
-        setStage("error");
+  // Ctrl/Cmd+Enter anywhere on the page; the editors handle it themselves and stop it bubbling.
+  const translateRef = useRef(translate);
+  useEffect(() => {
+    translateRef.current = translate;
+  }, [translate]);
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.defaultPrevented) {
+        event.preventDefault();
+        translateRef.current();
       }
-    } catch (error) {
-      setStage("error");
-      const messages = [error.message];
-      if (error.message === "Failed to fetch") {
-        messages.push("Make sure the FastAPI backend is running on http://127.0.0.1:8000.");
-      }
-      setErrors(messages);
-    } finally {
-      setIsRunning(false);
-    }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const confirmSource = (framework) => {
+    setSource(framework);
+    translate(framework);
   };
 
-  const copyOutput = async () => {
-    if (!outputCode) return;
+  const swapSource = source !== AUTO_DETECT ? source : detected;
+  const swap = () => {
+    if (!swapSource) return;
+    setSource(target);
+    setTarget(swapSource);
+    if (outputCode) {
+      setInputCode(outputCode);
+      setOutputCode("");
+    }
+    reset();
+  };
 
-    await navigator.clipboard.writeText(outputCode);
-    setCopyLabel("Copied");
-    window.setTimeout(() => setCopyLabel("Copy"), 1400);
+  const loadSample = () => {
+    setInputCode(SAMPLES[sourceLanguage]);
+    setOutputCode("");
+    reset();
+  };
+
+  const clearInput = () => {
+    setInputCode("");
+    setOutputCode("");
+    reset();
   };
 
   return (
-    <div className="app-shell">
-      <div className="page-glow page-glow-left" />
-      <div className="page-glow page-glow-right" />
+    <div className="app">
+      <Header health={health} theme={theme} onToggleTheme={toggleTheme} />
 
-      <TopBar detected={detected} stage={stage} sourceAccent={sourceAccent} />
-
-      <ControlStrip
-        sourceFramework={sourceFramework}
-        targetFramework={targetFramework}
-        sourceAccent={sourceAccent}
-        targetAccent={targetAccent}
+      <RouteBar
+        source={source}
+        target={target}
         sourceOptions={SOURCE_OPTIONS}
         targetOptions={TARGET_OPTIONS}
         isRunning={isRunning}
-        onSourceChange={setSourceFramework}
-        onTargetChange={setTargetFramework}
-        onTranslate={translateCode}
+        canSwap={Boolean(swapSource)}
+        onSourceChange={setSource}
+        onTargetChange={setTarget}
+        onSwap={swap}
+        onTranslate={() => translate()}
       />
 
-      <Workspace
-        sourceFramework={sourceFramework}
-        targetFramework={targetFramework}
-        sourceAccent={sourceAccent}
-        targetAccent={targetAccent}
-        inputCode={inputCode}
-        outputCode={outputCode}
-        inputLines={editorStats.inputLines}
-        outputLines={editorStats.outputLines}
-        copyLabel={copyLabel}
-        onInputChange={setInputCode}
-        onOutputChange={setOutputCode}
-        onCopyOutput={copyOutput}
-      />
+      <PipelineRail run={run} />
 
-      <StatusDock confidence={confidence} warnings={warnings} errors={errors} />
+      <main className="workspace">
+        <SourcePane
+          source={source}
+          language={sourceLanguage}
+          code={inputCode}
+          onChange={setInputCode}
+          onLoadSample={loadSample}
+          onClear={clearInput}
+          onRun={() => translate()}
+        />
+        <ResultPane
+          target={target}
+          code={outputCode}
+          run={run}
+          tab={tab}
+          onTabChange={setTab}
+          onCodeChange={setOutputCode}
+          onConfirmSource={confirmSource}
+          onRun={() => translate()}
+        />
+      </main>
+
+      <Notices errors={run.errors} warnings={run.warnings} />
     </div>
   );
 }
