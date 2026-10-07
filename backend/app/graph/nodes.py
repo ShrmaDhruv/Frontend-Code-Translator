@@ -109,7 +109,9 @@ def clean_output(state: PipelineState) -> dict:
 
 
 def validate_output(state: PipelineState) -> dict:
-    validation = validate_translation(state["translated_code"], state["ir"], state["target"])
+    validation = validate_translation(
+        state["translated_code"], state["ir"], state["target"], source_code=state["code"],
+    )
     return {"validation": validation, "attempts": state["attempts"] + 1}
 
 

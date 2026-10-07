@@ -25,6 +25,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from app.ir.treesitter.common import parse, walk
+from app.translation.libraries import plan as library_plan
 
 log = logging.getLogger(__name__)
 
@@ -202,13 +203,18 @@ def check_output(
     compare(_LOGIC_CAPABILITIES, source_logic, output_logic)
     compare(_MARKUP_CAPABILITIES, source_plain, output_plain)
 
+    # Library swaps the translator asks for (e.g. react-bootstrap -> Bootstrap's stylesheet) are not new capabilities.
+    libraries = library_plan(source_plain, source_framework, target_framework)
+    for url in libraries.allowed_urls:
+        output_plain = output_plain.replace(url, "")
+
     source_hosts, output_hosts = _hosts(source_plain), _hosts(output_plain)
     for host, count in output_hosts.items():
         if count > source_hosts.get(host, 0):
             where = "that the source code does not contain" if host not in source_hosts else "more often than the source code does"
             report.violations.append(f"security: output uses a URL on '{host}' {where}; remove it")
 
-    allowed = _packages(source_plain) | _FRAMEWORK_PACKAGES.get(target_framework, set())
+    allowed = _packages(source_plain) | _FRAMEWORK_PACKAGES.get(target_framework, set()) | libraries.allowed_packages
     for package in sorted(_packages(output_plain) - allowed):
         if target_framework == "Angular" and package.startswith("@angular/"):
             continue

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
-from app.ollama_client.client import DETECTION_MODEL, OLLAMA_BASE, TRANSLATION_MODEL
+from app.ollama_client.client import DETECTION_MODEL, OLLAMA_BASE, TRANSLATION_MODEL, TRANSLATION_NUM_CTX
 
 load_dotenv()
 
@@ -14,6 +14,8 @@ OLLAMA_KEEP_ALIVE   = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 WARMUP_TIMEOUT_SECS = int(os.getenv("OLLAMA_WARMUP_TIMEOUT_SECS", "240"))
 
 REQUIRED_MODELS = (DETECTION_MODEL, TRANSLATION_MODEL)
+# Load each model with the context size its requests use, or Ollama reloads it on the first request.
+MODEL_NUM_CTX   = {TRANSLATION_MODEL: TRANSLATION_NUM_CTX}
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,8 @@ def warm_required_models() -> list[WarmupResult]:
                 "temperature": 0,
             },
         }
+        if MODEL_NUM_CTX.get(model):
+            payload["options"]["num_ctx"] = MODEL_NUM_CTX[model]
 
         try:
             response = session.post(

@@ -17,13 +17,18 @@ DETECTION_TIMEOUT_SECS = int(os.getenv("HF_TIMEOUT_SECS", "120"))
 # Large model: code translation.
 TRANSLATION_MODEL        = os.getenv("MODEL_NAME", "qwen2.5-coder:14b")
 TRANSLATION_TIMEOUT_SECS = int(os.getenv("TIMEOUT_SECS", "180"))
+# Ollama's default window is 4096 tokens. The translation prompt alone is 2,500-3,200 tokens
+# for a small component and the reply can take 2,048 more; past the window Ollama silently
+# drops the start of the prompt (the rules).
+TRANSLATION_NUM_CTX      = int(os.getenv("TRANSLATION_NUM_CTX", "8192"))
 
 
 class OllamaClient:
 
-    def __init__(self, model: str, timeout_secs: int):
+    def __init__(self, model: str, timeout_secs: int, num_ctx: int | None = None):
         self.model        = model
         self.timeout_secs = timeout_secs
+        self.num_ctx      = num_ctx
         self._loaded      = False
 
     def _load(self):
@@ -64,6 +69,8 @@ class OllamaClient:
                 "temperature": temperature,
             },
         }
+        if self.num_ctx:
+            payload["options"]["num_ctx"] = self.num_ctx
 
         try:
             response = post_with_retry(self._session, OLLAMA_URL, payload, self.timeout_secs)
@@ -92,4 +99,4 @@ def detection_client() -> OllamaClient:
 @lru_cache(maxsize=None)
 def translation_client() -> OllamaClient:
     """Shared client for the translation model (one per process)."""
-    return OllamaClient(TRANSLATION_MODEL, TRANSLATION_TIMEOUT_SECS)
+    return OllamaClient(TRANSLATION_MODEL, TRANSLATION_TIMEOUT_SECS, num_ctx=TRANSLATION_NUM_CTX)

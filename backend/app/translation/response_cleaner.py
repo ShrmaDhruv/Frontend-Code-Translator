@@ -1,5 +1,6 @@
 import re
 
+from app.translation.styles import remove_empty_styles
 from app.translation import empty_functions
 from app.translation.imports import add_missing_imports
 
@@ -186,6 +187,7 @@ def _sanitize_output(code: str, target_framework: str) -> str:
     # Empty functions first: removing their calls can leave empty lifecycle hooks behind.
     code = empty_functions.remove(code)
     code = _remove_empty_placeholders(code)
+    code = remove_empty_styles(code)
     code = add_missing_imports(code, target_framework)
     if target_framework == "Vue":
         code = _prune_unused_vue_imports(code)

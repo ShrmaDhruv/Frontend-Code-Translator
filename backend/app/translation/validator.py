@@ -4,6 +4,14 @@ from app.ir.schema import IR
 from app.security.prompt_guard import leaked_canary
 from app.translation import empty_functions
 from app.translation.imports import find_missing
+from app.translation.libraries import (
+    foreign_packages,
+    missing_stylesheets,
+    plan as library_plan,
+    replacement_hint,
+    undefined_component_tags,
+)
+from app.translation.styles import invented_declarations
 from app.translation.template_refs import undefined_template_refs
 
 
@@ -34,14 +42,28 @@ _FRAMEWORK_MARKERS = {
 }
 
 # Bare setX( calls (useState setters); skips browser timers and method calls like el.setAttribute(
-_REACT_SETTER = r'(?<![.\w])set(?!(?:Interval|Timeout|Immediate)\b)[A-Z]\w+\s*\('
+_REACT_SETTER = r'(?<![.\w])(set(?!(?:Interval|Timeout|Immediate)\b)[A-Z]\w+)\s*\('
 
 _ANTI_MARKERS = {
     "React":   [r'<template>', r'ngOnInit', r'<!DOCTYPE'],
-    "Vue":     [r'useState\b', _REACT_SETTER, r'ngOnInit', r'<!DOCTYPE'],
-    "Angular": [r'<template>', r'useState\b', _REACT_SETTER, r'<!DOCTYPE'],
-    "HTML":    [r'useState\b', _REACT_SETTER, r'<template>', r'ngOnInit'],
+    "Vue":     [r'useState\b', r'ngOnInit', r'<!DOCTYPE'],
+    "Angular": [r'<template>', r'useState\b', r'<!DOCTYPE'],
+    "HTML":    [r'useState\b', r'<template>', r'ngOnInit'],
 }
+
+
+def _undefined_setters(code: str) -> list[str]:
+    """setX(...) calls with no setX defined in the output: React useState setters copied over."""
+    undefined = []
+    for name in sorted(set(re.findall(_REACT_SETTER, code))):
+        declared = re.search(rf'\b(?:function|const|let|var)\s+{name}\b', code)
+        method = re.search(
+            rf'(?m)^[ \t]*(?:(?:public|private|protected|static|async)\s+)*{name}\s*\([^)]*\)\s*(?::\s*[^{{;=]+)?\{{',
+            code,
+        )
+        if not declared and not method:
+            undefined.append(name)
+    return undefined
 
 _REQUIRED_MARKERS = {
     "Vue": [r'<template>', r'<script\s+setup'],
@@ -520,6 +542,7 @@ def validate_translation(
     code:             str,
     ir:               IR,
     target_framework: str,
+    source_code:      str | None = None,
 ) -> TranslationValidationResult:
     """
     Validate translated code against the source IR.
@@ -528,6 +551,9 @@ def validate_translation(
         code             : Cleaned translated code string
         ir               : Source IR the translation was generated from
         target_framework : The framework the code was translated into
+        source_code      : Original source. When given, the output is also
+                           checked for CSS the source does not have and for
+                           a dropped CSS-library stylesheet
 
     Returns:
         TranslationValidationResult with errors and warnings
@@ -561,6 +587,45 @@ def validate_translation(
                 f"output contains source-framework marker '{anti}' — "
                 f"translation may have failed"
             )
+
+    if target_framework != "React":
+        setters = _undefined_setters(code)
+        if setters:
+            errors.append(
+                f"output calls {', '.join(setters)}, React state setter(s) that are not defined in the "
+                f"{target_framework} code; update the state directly instead"
+            )
+
+    for package, framework in foreign_packages(code, target_framework):
+        errors.append(
+            f"output imports '{package}', a {framework} package that cannot be used in {target_framework} code; "
+            f"{replacement_hint(package, target_framework)}"
+        )
+
+    component_tags = undefined_component_tags(code, target_framework)
+    if component_tags:
+        errors.append(
+            f"template uses component tag(s) {', '.join(f'<{tag}>' for tag in component_tags)} that the "
+            f"{target_framework} code does not define; replace them with plain HTML elements"
+        )
+
+    if source_code:
+        invented = invented_declarations(source_code, code)
+        if invented:
+            shown = "; ".join(invented[:6]) + (" ..." if len(invented) > 6 else "")
+            errors.append(
+                f"output adds CSS that the source does not have ({shown}); remove every CSS declaration "
+                "that is not in the source, and remove the style block if nothing is left"
+            )
+        for family in missing_stylesheets(source_code, code, target_framework):
+            how = (
+                f'<link rel="stylesheet" href="{family.css_url}"> in <head>' if target_framework == "HTML"
+                else f"import '{family.css_import}'"
+            )
+            errors.append(f"output does not load the {family.name} stylesheet the source uses; add {how}")
+        for warning in library_plan(source_code, ir.framework, target_framework).warnings:
+            if warning not in warnings:
+                warnings.append(warning)
 
     markers      = _FRAMEWORK_MARKERS.get(target_framework, [])
     markers_hit  = sum(1 for m in markers if re.search(m, code))
